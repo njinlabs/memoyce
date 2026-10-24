@@ -1,21 +1,11 @@
-# agent
+# Agent Memory Kit
 
-To install dependencies:
+Library memori untuk AI agent berbasis SurrealDB. Lihat [CLAUDE.md](CLAUDE.md) untuk kontrak desain.
 
 ```bash
 bun install
+bun run typecheck
+bun run lint
+bun test
+bun run test:coverage
 ```
-
-To run:
-
-```bash
-bun run index.ts
-```
-
-To type check:
-
-```bash
-bun check
-```
-
-This project was created using `bun init` in bun v1.4.3. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
