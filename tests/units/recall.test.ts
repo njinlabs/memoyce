@@ -1,7 +1,9 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
+import type { RecordId } from "surrealdb";
 import { z } from "zod";
 import { type RecallInput, type RecallResult, recall, recallSchema } from "../../src/core/recall";
 import { type RememberInput, remember } from "../../src/core/remember";
+import { partitionTable } from "../../src/core/vectors";
 import { openTestContext, type TestContext, testAttributes } from "../support/context";
 import { createFakeEmbedder, type FakeEmbedder } from "../support/embedder";
 
@@ -268,12 +270,32 @@ test("scope besar: ANN diperluas bila banyak kandidat tidak berlaku pada as_of",
   const early = await recall(t.ctx, { scope, query: "hobi Hobi Besar", as_of: "2025-01-01" });
   expect(early.ok && early.found).toBe(false);
 
-  // Pada waktu berlaku, entitas yang disebut punya 60 fakta langsung: sebagian di luar top-k
-  // ANN dan dinilai lewat lookup kemiripan langsung.
-  const now = await recall(t.ctx, { scope, query: "hobi Hobi Besar", limit: 50 });
-  if (!now.ok) throw new Error("seharusnya ok");
-  expect(now.found).toBe(true);
-  expect(now.items.length).toBeGreaterThan(20);
-  expect(now.items.every((i) => i.signals.entity === "direct")).toBe(true);
-  expect(now.items.every((i) => i.signals.vector !== undefined)).toBe(true);
+  // Satu baris vektor turunan dihapus (data turunan, bukan fakta): fakta itu mustahil dikembalikan
+  // ANN tetapi tetap kandidat graf, sehingga cabang lookup kemiripan langsung pasti berjalan.
+  // (Mengandalkan jumlah k vs ukuran partisi tidak deterministik: struktur HNSW acak.)
+  const [one] = await t.ctx.db
+    .query<[{ id: RecordId }[]]>("SELECT id FROM fact WHERE scope = $scope LIMIT 1", { scope })
+    .collect();
+  await t.ctx.db
+    .query("DELETE type::record($table, record::id($id))", {
+      table: partitionTable("fvec", scope),
+      id: one?.[0]?.id,
+    })
+    .collect();
+
+  const sql: string[] = [];
+  const original = t.ctx.db.query.bind(t.ctx.db);
+  const spy = spyOn(t.ctx.db, "query").mockImplementation(((query: string, ...rest: unknown[]) => {
+    sql.push(query);
+    return (original as (...a: unknown[]) => unknown)(query, ...rest);
+  }) as never);
+  try {
+    const now = await recall(t.ctx, { scope, query: "hobi Hobi Besar" });
+    if (!now.ok) throw new Error("seharusnya ok");
+    expect(now.found).toBe(true);
+    expect(now.items.every((i) => i.signals.entity === "direct")).toBe(true);
+    expect(sql.some((q) => q.includes("FROM $records"))).toBe(true);
+  } finally {
+    spy.mockRestore();
+  }
 });

@@ -56,12 +56,21 @@ Lima persyaratan ini adalah kontrak sistem. Setiap perubahan harus menjaganya.
 
 `memory.recall({ scope (string | string[]), query, as_of?, limit?, min_similarity?, min_keyword_coverage? })` menggabungkan tiga kanal:
 - **Vektor:** ANN pada `fvec` (query di-embed dengan `kind: "query"`).
-- **Kata kunci:** BM25 dengan semantik OR (`@0,OR@`) pada `fact.text`. Skor BM25 hanya dipakai untuk peringkat: pada korpus kecil bisa 0 walau kata cocok persis. Bukti kata kunci = **cakupan istilah query** (porsi istilah bermakna, tanpa kata tanya/penghubung dari `contentTerms`, yang ada di teks fakta).
+- **Kata kunci:** BM25 dengan semantik OR (`@0,OR@`) pada `fact.text`. Skor BM25 hanya dipakai untuk peringkat: pada korpus kecil bisa 0 walau kata cocok persis. Bukti kata kunci = **cakupan istilah query**: porsi istilah bermakna (tanpa kata tanya/penghubung dari `contentTerms`, **dan tanpa istilah yang merupakan nama entitas yang disebut di query**) yang ada di teks fakta. Nama entitas dikecualikan karena muncul di teks semua faktanya (subjek maupun nilai) sehingga tidak membedakan fakta yang menjawab; tanpa ini "alamat kantor PT Maju" menganggap fakta anggaran PT Maju relevan. Kandidat dengan cakupan 0 tidak mendapat peringkat di kanal kata kunci (RRF hanya melihat peringkat, jadi tanpa ini fakta yang hanya cocok lewat nama entitas bisa menyaingi yang menjawab).
 - **Graf:** entitas yang disebut (n-gram query dicocokkan ke `entity.keys`, dan kemiripan makna ke `evec`), lalu fakta langsung entitas itu dan fakta berelasi satu lompatan (nilai yang menunjuk ke entitas itu, atau milik entitas yang ditunjuk faktanya). Kandidat graf yang lolos dari ANN dinilai kemiripannya lewat lookup id langsung.
 
 Fusi RRF (bobot vektor 1, kata kunci 1, graf 0,5). **Skor RRF berbasis peringkat sehingga selalu menghasilkan sesuatu**; yang menentukan "tahu atau tidak" adalah ambang absolut: kemiripan kosinus >= `minSimilarity` ATAU cakupan istilah >= `minKeywordCoverage`. Fakta yang hanya terhubung lewat entitas tanpa bukti isi **tidak** dikembalikan. Hasil tanpa bukti = `{ found: false, items: [], linked_entities, message: "... Jangan menebak." }`.
 
 **Ambang bawaan (0,5 / 0,5) belum dikalibrasi.** Kemiripan bergantung pada model embedding; kalibrasi dengan set evaluasi berlabel (pertanyaan yang bisa dan tidak bisa dijawab) pada model sungguhan sebelum dipakai produksi. Tes memakai embedder palsu (bag-of-words) yang hanya menguji mekanisme, bukan mutu semantik.
+
+## Konteks siap suntik (`memory.context`)
+
+`memory.context({ scope, query?, as_of?, limit?, quotes? })` mengembalikan `{ found, text, items, entities }`; `text` adalah blok ringkas siap ditaruh di prompt (briefing.ts).
+- **Tanpa `query`: briefing** fakta berlaku terbaru (urut `valid_from` menurun, dikelompokkan per entitas, nilai lama yang sudah diganti tidak ikut). Ini yang memungkinkan AI berinisiatif melanjutkan konteks di awal sesi atau panggilan stateless, tanpa menunggu pertanyaan atau memanggil tool. Memakai index `fact(scope, valid_from)` (migrasi v4) agar tidak memindai seluruh scope; query dijalankan per scope lalu digabung.
+- **Dengan `query`:** fakta relevan (memakai `recall`) dalam bentuk teks.
+- Selalu tegas: memori kosong atau tidak punya jawaban menghasilkan kalimat eksplisit ("belum ada informasi" / "Jangan menebak"), bukan teks kosong.
+- Label baris memakai bagian depan `description` atribut (sebelum " ("), jadi jaga deskripsi atribut tetap ringkas di depan.
+- Library tidak memutuskan apa yang diingat atau kapan briefing diminta; itu urusan aplikasi.
 
 ## Tool untuk AI
 
@@ -71,6 +80,10 @@ Fusi RRF (bobot vektor 1, kata kunci 1, graf 0,5). **Skor RRF berbasis peringkat
 - Kesalahan yang bisa diperbaiki AI (atribut tak dikenal, kutipan, entitas ambigu, input rusak) dikembalikan sebagai data (`ok: false` + `errors`), tidak dilempar. Galat infrastruktur (embedder, DB) tetap dilempar sebagai `MemoryError`; aplikasi yang memutuskan cara menampilkannya ke AI.
 - Tanggal di skema divalidasi dengan `refine` (`schemas.ts`), bukan regex zod, karena pola regex ikut ke JSON Schema dan memboroskan token LLM. Beri `.describe()` pada field baru yang dilihat AI.
 - Tidak ada adapter per SDK; aplikasi memetakan nama field sendiri (contoh di README).
+
+## Aplikasi uji (examples/cli)
+
+Chat terminal dengan Gemini (`@google/genai`, devDependency) + embedding OpenAI atau Gemini, untuk menguji dengan LLM sungguhan; lihat `examples/cli/README.md`. Aturan: **bukan bagian library** (tidak diimpor dari `src/`, tidak ikut paket, dikecualikan dari coverage); membaca environment variable boleh di sini saja. Logika murni (`agent.ts` loop tool dan pemotongan riwayat per giliran, `embedders.ts`) dites tanpa jaringan di `tests/units/example-cli.test.ts` dengan model palsu. Tool memakai `parametersJsonSchema` Gemini, jadi skema tool kita dipakai apa adanya. Bagian model yang dikembalikan Gemini disimpan utuh di riwayat (model generasi baru butuh thought signature).
 
 ## Aturan Kerja
 

@@ -84,6 +84,13 @@ export const migrations: Migration[] = [
       REMOVE FIELD IF EXISTS embedding ON entity;
     `,
   },
+  {
+    version: 4,
+    up: `
+      -- Briefing tanpa pertanyaan: fakta terbaru per scope tanpa memindai seluruh tabel.
+      DEFINE INDEX IF NOT EXISTS fact_scope_recent ON fact FIELDS scope, valid_from;
+    `,
+  },
 ];
 
 export const latestVersion = (): number => migrations.at(-1)?.version ?? 0;

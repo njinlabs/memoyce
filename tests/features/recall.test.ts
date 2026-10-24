@@ -171,3 +171,26 @@ test("tanpa embedder: kata kunci dan graf tetap bekerja, makna dimatikan", async
     await plain.close();
   }
 });
+
+test("sesi baru: briefing tanpa pertanyaan memungkinkan AI berinisiatif melanjutkan konteks", async () => {
+  // Awal sesi tanpa riwayat chat: aplikasi meminta briefing lalu menaruhnya di prompt.
+  const briefing = await memory.context({ scope: SCOPE });
+  if (!briefing.ok) throw new Error("seharusnya ok");
+  expect(briefing.found).toBe(true);
+  expect(briefing.text).toContain("PT Maju (organization)");
+  // Hanya keadaan terkini: nilai lama yang sudah diganti tidak ikut.
+  expect(briefing.text).toContain("anggaran: 75000000");
+  expect(briefing.text).not.toContain("50000000");
+  expect(briefing.entities.map((e) => e.name)).toContain("PT Maju");
+
+  // Dengan pertanyaan: hanya yang relevan, atau pernyataan tegas bahwa memori tidak tahu.
+  const asked = await memory.context({ scope: SCOPE, query: "berapa budget PT Maju" });
+  expect(asked.ok && asked.found).toBe(true);
+  const unknown = await memory.context({ scope: SCOPE, query: "warna logo kompetitor" });
+  expect(unknown.ok && unknown.text).toContain("Jangan menebak");
+
+  // Lead baru yang belum punya memori: dinyatakan kosong, bukan dibiarkan ambigu.
+  const fresh = await memory.context({ scope: "org:1/lead:baru" });
+  expect(fresh.ok && fresh.found).toBe(false);
+  expect(fresh.ok && fresh.text).toBe("Memori jangka panjang: belum ada informasi yang tersimpan.");
+});

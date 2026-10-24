@@ -116,6 +116,74 @@ function jsonValue(value: unknown, names: Map<string, string>): unknown {
 const iso = (value: unknown): string =>
   value instanceof DateTime ? value.toDate().toISOString() : String(value);
 
+export type FactDetail = Omit<RecallItem, "score" | "signals">;
+
+// Detail fakta (entitas, sumber, nilai JSON murni) untuk id yang diminta, terbatas pada scope
+// yang diizinkan. Id yang tidak ada atau di luar scope tidak muncul di hasil.
+export async function loadFacts(
+  ctx: Ctx,
+  ids: RecordId[],
+  scopes: string[],
+): Promise<Map<string, FactDetail>> {
+  if (ids.length === 0) return new Map();
+  const [rows = []] = await ctx.db
+    .query<
+      [
+        {
+          id: RecordId;
+          scope: string;
+          attribute: string;
+          value: unknown;
+          text?: string;
+          quote?: string;
+          valid_from: DateTime;
+          valid_to?: DateTime;
+          entity: RecordId;
+          entity_name: string;
+          entity_kind: string;
+          source: RecordId;
+          received_at: DateTime;
+        }[],
+      ]
+    >(
+      `SELECT id, scope, attribute, value, text, quote, valid_from, valid_to, entity, source,
+              entity.name AS entity_name, entity.kind AS entity_kind,
+              source.received_at AS received_at
+       FROM fact WHERE id IN $ids AND scope IN $scopes`,
+      { ids, scopes },
+    )
+    .collect();
+
+  const refIds = rows.map((r) => r.value).filter((v): v is RecordId => v instanceof RecordId);
+  const names = new Map<string, string>();
+  if (refIds.length > 0) {
+    const [named = []] = await ctx.db
+      .query<[{ id: RecordId; name: string }[]]>("SELECT id, name FROM entity WHERE id IN $ids", {
+        ids: refIds,
+      })
+      .collect();
+    for (const n of named) names.set(key(n.id), n.name);
+  }
+
+  return new Map(
+    rows.map((row) => [
+      key(row.id),
+      {
+        fact: idToString(row.id),
+        scope: row.scope,
+        entity: { id: idToString(row.entity), name: row.entity_name, kind: row.entity_kind },
+        attribute: row.attribute,
+        value: jsonValue(row.value, names),
+        text: row.text ?? "",
+        quote: row.quote,
+        valid_from: iso(row.valid_from),
+        valid_to: row.valid_to ? iso(row.valid_to) : undefined,
+        source: { id: idToString(row.source), received_at: iso(row.received_at) },
+      },
+    ]),
+  );
+}
+
 // Mencari memori yang relevan dengan `query` lewat tiga kanal yang digabung:
 //   vektor (makna), BM25 (kata kunci), dan graf (fakta milik/berelasi dengan entitas yang disebut).
 // Hasil digabung dengan RRF. Skor RRF berbasis peringkat sehingga selalu menghasilkan sesuatu;
@@ -277,11 +345,20 @@ export async function recall(ctx: Ctx, raw: unknown): Promise<RecallResult> {
       { scopes, query: input.query, asOf },
     )
     .collect();
+  // Istilah yang merupakan nama entitas yang disebut di query tidak dihitung sebagai bukti isi:
+  // nama itu muncul di teks SEMUA fakta entitas tsb (sebagai subjek atau nilai), jadi tidak
+  // membedakan fakta yang menjawab dari yang tidak. Bila query hanya berisi nama entitas
+  // (menanyakan entitasnya secara umum), setiap fakta yang cocok dianggap relevan.
+  const mentioned = new Set([...linked.values()].flatMap((e) => tokenize(e.name)));
+  const evidenceTerms = queryTerms.filter((term) => !mentioned.has(term));
   for (const row of keyword) {
     const words = new Set(tokenize(row.text));
     const candidate = upsert(row.id, row.scope);
     candidate.bm25 = row.s;
-    candidate.keyword = queryTerms.filter((term) => words.has(term)).length / queryTerms.length;
+    candidate.keyword =
+      evidenceTerms.length === 0
+        ? 1
+        : evidenceTerms.filter((term) => words.has(term)).length / evidenceTerms.length;
   }
 
   // --- Fusi (RRF) dan ambang bukti ---
@@ -294,10 +371,8 @@ export async function recall(ctx: Ctx, raw: unknown): Promise<RecallResult> {
   };
   const vectorRank = ranked((c) => c.vector, -1);
   // Peringkat kata kunci: cakupan istilah dulu, BM25 sebagai pemisah (skor kecil diperhitungkan).
-  const keywordRank = ranked(
-    (c) => (c.keyword === undefined ? undefined : c.keyword * 1000 + (c.bm25 ?? 0)),
-    -1,
-  );
+  // Cakupan 0 = kecocokan BM25 hanya dari nama entitas: tidak ada bukti isi, tanpa peringkat.
+  const keywordRank = ranked((c) => (c.keyword ? c.keyword * 1000 + (c.bm25 ?? 0) : undefined), -1);
   const graphRank = ranked((c) => c.graphRank, 1);
   const fused = (c: Candidate): number => {
     const part = (rank: number | undefined, weight: number) =>
@@ -339,61 +414,17 @@ export async function recall(ctx: Ctx, raw: unknown): Promise<RecallResult> {
   if (supported.length === 0) return notFound();
 
   // --- Ambil detail hanya untuk hasil akhir ---
-  const [rows = []] = await ctx.db
-    .query<
-      [
-        {
-          id: RecordId;
-          scope: string;
-          attribute: string;
-          value: unknown;
-          text?: string;
-          quote?: string;
-          valid_from: DateTime;
-          valid_to?: DateTime;
-          entity: RecordId;
-          entity_name: string;
-          entity_kind: string;
-          source: RecordId;
-          received_at: DateTime;
-        }[],
-      ]
-    >(
-      `SELECT id, scope, attribute, value, text, quote, valid_from, valid_to, entity, source,
-              entity.name AS entity_name, entity.kind AS entity_kind,
-              source.received_at AS received_at
-       FROM fact WHERE id IN $ids AND scope IN $scopes`,
-      { ids: supported.map((c) => c.id), scopes },
-    )
-    .collect();
-  const byId = new Map(rows.map((r) => [key(r.id), r]));
-
-  const refIds = rows.map((r) => r.value).filter((v): v is RecordId => v instanceof RecordId);
-  const names = new Map<string, string>();
-  if (refIds.length > 0) {
-    const [named2 = []] = await ctx.db
-      .query<[{ id: RecordId; name: string }[]]>("SELECT id, name FROM entity WHERE id IN $ids", {
-        ids: refIds,
-      })
-      .collect();
-    for (const n of named2) names.set(key(n.id), n.name);
-  }
-
+  const details = await loadFacts(
+    ctx,
+    supported.map((c) => c.id),
+    scopes,
+  );
   const items: RecallItem[] = [];
   for (const candidate of supported) {
-    const row = byId.get(key(candidate.id));
-    if (!row) continue;
+    const detail = details.get(key(candidate.id));
+    if (!detail) continue;
     items.push({
-      fact: idToString(row.id),
-      scope: row.scope,
-      entity: { id: idToString(row.entity), name: row.entity_name, kind: row.entity_kind },
-      attribute: row.attribute,
-      value: jsonValue(row.value, names),
-      text: row.text ?? "",
-      quote: row.quote,
-      valid_from: iso(row.valid_from),
-      valid_to: row.valid_to ? iso(row.valid_to) : undefined,
-      source: { id: idToString(row.source), received_at: iso(row.received_at) },
+      ...detail,
       score: fused(candidate),
       signals: {
         vector: candidate.vector,

@@ -77,6 +77,27 @@ Kesalahan yang bisa diperbaiki AI (atribut salah, kutipan tidak ada di teks, ent
 dikembalikan sebagai data `{ ok: false, errors }`, bukan dilempar, sehingga AI bisa memperbaiki
 panggilannya sendiri. Galat infrastruktur (embedder, database) dilempar sebagai `MemoryError`.
 
+### Melanjutkan konteks (AI stateless / awal sesi)
+
+AI tidak perlu menunggu pertanyaan. Di awal sesi, atau di setiap panggilan stateless, aplikasi
+meminta briefing dan menaruhnya di prompt:
+
+```ts
+const briefing = await memory.context({ scope: "org:42/lead:7" });
+// briefing.text, mis.:
+//   Memori jangka panjang (keadaan per 2025-02-01, yang terbaru lebih dulu):
+//   PT Maju (organization)
+//   - anggaran: 75000000, sejak 2025-02-01
+//   - tahap penjualan: demo, sejak 2025-02-01
+// Kosong tetap dinyatakan tegas: "Memori jangka panjang: belum ada informasi yang tersimpan."
+const system = `Kamu asisten penjualan.
+
+${briefing.text}`;
+
+// Atau hanya yang relevan dengan pesan pengguna:
+const relevant = await memory.context({ scope: "org:42/lead:7", query: userMessage });
+```
+
 ### Tanpa AI (langsung)
 
 ```ts
@@ -97,6 +118,10 @@ const answer = await memory.recall({ scope: "org:42/lead:7", query: "berapa budg
 await memory.reindex(); // bangun ulang vektor (ganti model embedding, atau mengisi data lama)
 await memory.close();
 ```
+
+## Mencoba dengan LLM sungguhan
+
+Aplikasi chat terminal dengan Gemini ada di [examples/cli](examples/cli/README.md).
 
 ## Pengembangan
 
