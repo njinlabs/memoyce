@@ -1,8 +1,15 @@
 import { z } from "zod";
-import { dbEnvSchema } from "./db";
 
 const configSchema = z.object({
-  ...dbEnvSchema.shape,
+  SURREAL_PATH: z.string().min(1).default("./data/surreal"),
+  SURREAL_NAMESPACE: z
+    .string()
+    .regex(/^[A-Za-z_][A-Za-z0-9_]*$/)
+    .default("agent"),
+  SURREAL_DATABASE: z
+    .string()
+    .regex(/^[A-Za-z_][A-Za-z0-9_]*$/)
+    .default("agent"),
 });
 
 export let env: z.infer<typeof configSchema>;

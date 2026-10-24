@@ -1,21 +1,19 @@
+import { isAbsolute, relative, resolve } from "node:path";
 import { createNodeEngines } from "@surrealdb/node";
 import { createRemoteEngines, Surreal } from "surrealdb";
-import z from "zod";
 import { env } from "./config";
 
 export let db: Surreal;
 
-export const dbEnvSchema = z.object({
-  SURREAL_PATH: z.string().min(1).default("./data/surreal"),
-  SURREAL_NAMESPACE: z
-    .string()
-    .regex(/^[A-Za-z_][A-Za-z0-9_]*$/)
-    .default("agent"),
-  SURREAL_DATABASE: z
-    .string()
-    .regex(/^[A-Za-z_][A-Za-z0-9_]*$/)
-    .default("agent"),
-});
+// Engine memotong drive path absolut Windows ("C:/x" menjadi "./C/x"), jadi path selalu
+// diubah menjadi relatif terhadap cwd. Beda drive tidak bisa direlatifkan.
+export function rocksdbUrl(path: string): string {
+  const relativePath = relative(process.cwd(), resolve(path));
+  if (isAbsolute(relativePath)) {
+    throw new Error(`SURREAL_PATH harus satu drive dengan working directory: ${path}`);
+  }
+  return `rocksdb://${relativePath.replaceAll("\\", "/") || "."}`;
+}
 
 export async function connectDb(): Promise<void> {
   db = new Surreal({
@@ -23,7 +21,7 @@ export async function connectDb(): Promise<void> {
   });
 
   try {
-    await db.connect(`rocksdb://${env.SURREAL_PATH.replaceAll("\\", "/")}`);
+    await db.connect(rocksdbUrl(env.SURREAL_PATH));
 
     await db.query(
       `DEFINE NAMESPACE IF NOT EXISTS ${env.SURREAL_NAMESPACE};
