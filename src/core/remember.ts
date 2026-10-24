@@ -24,15 +24,17 @@ const entityRef = z.union([
 export const rememberSchema = z.object({
   scope: z.string().min(1),
   source: z.object({
-    content: z.string().min(1),
+    content: z.string().min(1).describe("Teks asal persis seperti diterima"),
     meta: z.record(z.string(), z.unknown()).optional(),
     received_at: isoTime.optional(),
   }),
   facts: z
     .array(
       z.object({
-        entity: entityRef,
-        attribute: z.string().min(1),
+        entity: entityRef.describe(
+          "Subjek fakta: nama, { name, kind } (kind mis. person/organization), atau { id } dari hasil sebelumnya",
+        ),
+        attribute: z.string().min(1).describe("Salah satu atribut yang tersedia (atau aliasnya)"),
         value: z.union([
           z.string(),
           z.number(),
@@ -40,8 +42,17 @@ export const rememberSchema = z.object({
           z.array(z.unknown()),
           z.record(z.string(), z.unknown()),
         ]),
-        quote: z.string().min(1),
-        valid_from: isoTime.optional(),
+        quote: z
+          .string()
+          .min(1)
+          .describe(
+            "Kutipan persis dari source.content yang mendukung fakta ini (min. 3 karakter)",
+          ),
+        valid_from: isoTime
+          .optional()
+          .describe(
+            "Sejak kapan fakta berlaku, bila disebut di teks; default: waktu teks diterima",
+          ),
       }),
     )
     .min(1)

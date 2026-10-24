@@ -17,9 +17,14 @@ const GRAPH_CAP = 200;
 
 export const recallSchema = z.object({
   scope: z.union([z.string().min(1), z.array(z.string().min(1)).min(1).max(20)]),
-  query: z.string().trim().min(1).max(2000),
-  as_of: isoTime.optional(),
-  limit: z.number().int().min(1).max(50).default(DEFAULT_LIMIT),
+  query: z
+    .string()
+    .trim()
+    .min(1)
+    .max(2000)
+    .describe("Pertanyaan atau kata kunci; sebut nama entitas dan istilah penting"),
+  as_of: isoTime.optional().describe("Tanyakan keadaan pada tanggal ini; default: sekarang"),
+  limit: z.number().int().min(1).max(50).default(DEFAULT_LIMIT).describe("Jumlah maksimum hasil"),
   // Mengganti ambang bawaan dari opsi retrieval untuk panggilan ini.
   min_similarity: z.number().min(-1).max(1).optional(),
   min_keyword_coverage: z.number().min(0).max(1).optional(),

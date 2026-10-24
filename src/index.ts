@@ -3,6 +3,7 @@ import type { MemoryOptions } from "./core/options";
 import { type RecallInput, type RecallResult, recall } from "./core/recall";
 import { reindex } from "./core/reindex";
 import { type RememberInput, type RememberResult, remember } from "./core/remember";
+import { createTools, type MemoryTool, type ToolsOptions } from "./core/tools";
 
 export type { Embedder, EmbedKind } from "./core/embedder";
 export { MemoryError, type MemoryErrorCode } from "./core/errors";
@@ -15,6 +16,7 @@ export type {
   RememberInput,
   RememberResult,
 } from "./core/remember";
+export type { MemoryTool, ToolsOptions } from "./core/tools";
 
 export interface Memory {
   // Menyimpan teks sumber dan fakta terstruktur. Kegagalan yang bisa diperbaiki pemanggil
@@ -24,6 +26,9 @@ export interface Memory {
   recall(input: RecallInput): Promise<RecallResult>;
   // Membangun ulang semua vektor dan mengisi teks fakta yang belum ada. Perlu embedder.
   reindex(): Promise<{ entities: number; facts: number }>;
+  // Tool untuk AI aplikasi (memory_remember, memory_recall, memory_list_attributes), terikat
+  // pada scope yang ditentukan APLIKASI: AI tidak bisa memilih atau mengubah scope.
+  tools(options: ToolsOptions): MemoryTool[];
   // Menutup koneksi yang dibuka library. Koneksi milik aplikasi (storage.db) tidak ditutup.
   close(): Promise<void>;
 }
@@ -34,6 +39,7 @@ export async function createMemory(options: MemoryOptions): Promise<Memory> {
     remember: (input) => remember(ctx, input),
     recall: (input) => recall(ctx, input),
     reindex: () => reindex(ctx),
+    tools: (options) => createTools(ctx, options),
     close,
   };
 }

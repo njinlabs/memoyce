@@ -63,6 +63,15 @@ Fusi RRF (bobot vektor 1, kata kunci 1, graf 0,5). **Skor RRF berbasis peringkat
 
 **Ambang bawaan (0,5 / 0,5) belum dikalibrasi.** Kemiripan bergantung pada model embedding; kalibrasi dengan set evaluasi berlabel (pertanyaan yang bisa dan tidak bisa dijawab) pada model sungguhan sebelum dipakai produksi. Tes memakai embedder palsu (bag-of-words) yang hanya menguji mekanisme, bukan mutu semantik.
 
+## Tool untuk AI
+
+`memory.tools({ scope, readScopes?, sourceMeta?, readOnly? })` mengembalikan definisi netral `{ name, description, inputSchema (JSON Schema draft-7), execute }`: `memory_remember`, `memory_recall`, `memory_list_attributes` (`readOnly` membuang yang pertama). Input dan hasil adalah JSON murni.
+- **Keamanan: yang menentukan kepemilikan adalah APLIKASI, bukan AI.** `scope` (tulis) dan `readScopes` (baca, default `[scope]`) diikat saat tool dibuat. Skema tool tidak memuat `scope`, `source.meta`, maupun ambang bukti; nilai kiriman AI untuk field itu **diabaikan** (`pick` hanya mengambil field yang diizinkan, lalu scope/meta ditimpa). Jangan pernah menambahkan field kepemilikan atau ambang ke skema tool.
+- `description` dibangun dari kosakata atribut terdaftar (key, tipe, kardinalitas, alias) dan memuat instruksi: wajib `quote`, perbaiki bila `ok: false`, dan `found: false` berarti jangan menebak.
+- Kesalahan yang bisa diperbaiki AI (atribut tak dikenal, kutipan, entitas ambigu, input rusak) dikembalikan sebagai data (`ok: false` + `errors`), tidak dilempar. Galat infrastruktur (embedder, DB) tetap dilempar sebagai `MemoryError`; aplikasi yang memutuskan cara menampilkannya ke AI.
+- Tanggal di skema divalidasi dengan `refine` (`schemas.ts`), bukan regex zod, karena pola regex ikut ke JSON Schema dan memboroskan token LLM. Beri `.describe()` pada field baru yang dilihat AI.
+- Tidak ada adapter per SDK; aplikasi memetakan nama field sendiri (contoh di README).
+
 ## Aturan Kerja
 
 - Jangan pernah `DELETE` fakta untuk menangani perubahan; tutup dengan `valid_to`. Penghapusan nyata hanya lewat `forget` untuk permintaan privasi eksplisit (satu-satunya jalur `DELETE`, khusus aplikasi, bukan tool AI; belum dibuat).
@@ -81,5 +90,5 @@ Fusi RRF (bobot vektor 1, kata kunci 1, graf 0,5). **Skor RRF berbasis peringkat
 
 ## Status
 
-Selesai: opsi + validasi, penyimpanan (url/db), migrasi (v1-v3), kosakata atribut, `source`/`entity`, `assertFact` / `retractFact` / `factsAt`, `remember` (validasi dua tahap, verifikasi kutipan, resolusi entitas persis, embedding), `embedder` pluggable + `meta:embedding` + `reindex`, partisi vektor per scope, `recall` hibrida (vektor + BM25 + graf, RRF, ambang "tidak tahu").
-Belum: **kalibrasi ambang dan harness benchmark** (korpus realistis, dimensi 768-1536, skala ratusan ribu fakta per scope; pengukuran spike hanya data sintetis), resolusi entitas longgar lewat kemiripan (saat ini hanya nama/alias persis), penyisipan riwayat yang lebih lama dari fakta berlaku (`stale_time`), tool netral (`remember`/`recall`/`list_attributes`), `forget`, build/exports untuk npm, smoke test Node, README pemakai.
+Selesai: opsi + validasi, penyimpanan (url/db), migrasi (v1-v3), kosakata atribut, `source`/`entity`, `assertFact` / `retractFact` / `factsAt`, `remember` (validasi dua tahap, verifikasi kutipan, resolusi entitas persis, embedding), `embedder` pluggable + `meta:embedding` + `reindex`, partisi vektor per scope, `recall` hibrida (vektor + BM25 + graf, RRF, ambang "tidak tahu"), tool netral untuk AI (`memory.tools`).
+Belum: **kalibrasi ambang dan harness benchmark** (korpus realistis, dimensi 768-1536, skala ratusan ribu fakta per scope; pengukuran spike hanya data sintetis), resolusi entitas longgar lewat kemiripan (saat ini hanya nama/alias persis), penyisipan riwayat yang lebih lama dari fakta berlaku (`stale_time`), `forget`, build/exports untuk npm, smoke test Node, README pemakai.
