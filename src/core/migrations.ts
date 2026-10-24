@@ -50,6 +50,40 @@ export const migrations: Migration[] = [
       DEFINE INDEX IF NOT EXISTS fact_current ON fact FIELDS scope, entity, attribute, valid_to;
     `,
   },
+  {
+    version: 2,
+    up: `
+      -- Kunci pencarian entitas: nama dan alias ter-normalisasi (trim + huruf kecil), dihitung
+      -- DB sendiri supaya tidak bisa menyimpang dari data. Harus sama dengan entityKey().
+      DEFINE FIELD IF NOT EXISTS keys ON entity TYPE array<string>
+        VALUE array::distinct(array::concat(
+          [string::lowercase(string::trim(name))],
+          aliases.map(|$a| string::lowercase(string::trim($a)))
+        ));
+      UPDATE entity SET name = name;
+      REMOVE INDEX IF EXISTS entity_scope_name ON entity;
+      DEFINE INDEX IF NOT EXISTS entity_scope_keys ON entity FIELDS scope, keys;
+
+      -- Kutipan dari teks sumber yang mendukung fakta.
+      DEFINE FIELD IF NOT EXISTS quote ON fact TYPE option<string>;
+    `,
+  },
+  {
+    version: 3,
+    up: `
+      -- Kalimat fakta untuk full-text (BM25) dan embedding. Vektor tidak disimpan di sini
+      -- melainkan di partisi per scope (lihat vectors.ts).
+      DEFINE FIELD IF NOT EXISTS text ON fact TYPE option<string>;
+      DEFINE ANALYZER IF NOT EXISTS fact_text TOKENIZERS blank, class, punct FILTERS ascii, lowercase;
+      DEFINE INDEX IF NOT EXISTS fact_text_ft ON fact FIELDS text FULLTEXT ANALYZER fact_text BM25;
+
+      -- Pencarian balik: fakta yang nilainya merujuk ke suatu entitas.
+      DEFINE INDEX IF NOT EXISTS fact_scope_value ON fact FIELDS scope, value;
+
+      -- Embedding entitas pindah ke partisi per scope.
+      REMOVE FIELD IF EXISTS embedding ON entity;
+    `,
+  },
 ];
 
 export const latestVersion = (): number => migrations.at(-1)?.version ?? 0;

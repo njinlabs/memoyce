@@ -88,3 +88,28 @@ test("migrasi yang gagal dibatalkan seluruhnya dan versi tidak naik", async () =
   expect(await currentVersion(storage.db)).toBe(before);
   expect(await tableNames()).not.toContain("half");
 });
+
+test("v1 -> v2: keys terisi untuk entitas lama, kolom quote ada, index lama diganti", async () => {
+  const [v1] = migrations;
+  if (!v1) throw new Error("migrasi v1 hilang");
+  await storage.db.query(`BEGIN; ${v1.up} UPSERT meta:schema SET version = 1; COMMIT;`);
+  await storage.db.query(
+    "CREATE entity:lama SET scope = 's', name = '  Pak Budi', kind = 'person', aliases = ['BUDI']",
+  );
+  await migrate(storage.db, "auto");
+
+  const [row] = await storage.db
+    .query<[{ keys: string[] }]>("SELECT keys FROM ONLY entity:lama")
+    .collect();
+  expect(row?.keys).toEqual(["pak budi", "budi"]);
+
+  await storage.db.query(
+    "CREATE source:s1 SET scope = 's', content = 'x'; CREATE fact SET scope = 's', entity = entity:lama, attribute = 'a', value = 1, valid_from = time::now(), source = source:s1, quote = 'x'",
+  );
+  const [info] = await storage.db
+    .query<[{ tables: Record<string, string> }]>("INFO FOR TABLE entity")
+    .collect();
+  const indexes = Object.keys((info as unknown as { indexes: Record<string, string> }).indexes);
+  expect(indexes).toContain("entity_scope_keys");
+  expect(indexes).not.toContain("entity_scope_name");
+});

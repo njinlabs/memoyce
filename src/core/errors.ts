@@ -6,7 +6,12 @@ export type MemoryErrorCode =
   | "invalid_value"
   | "not_found"
   | "scope_mismatch"
-  | "stale_time";
+  | "stale_time"
+  | "invalid_input"
+  | "quote_not_found"
+  | "ambiguous_entity"
+  | "embedder"
+  | "embedder_mismatch";
 
 // Semua kegagalan yang bisa diperbaiki pemanggil memakai kelas ini, dengan `code` yang stabil
 // dan `details` terstruktur (misalnya saran atribut), supaya lapisan tool bisa mengubahnya

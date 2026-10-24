@@ -1,5 +1,6 @@
 import type { Surreal } from "surrealdb";
 import { z } from "zod";
+import { embedderSchema } from "./embedder";
 import { MemoryError } from "./errors";
 
 const identifier = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/);
@@ -45,6 +46,20 @@ export const optionsSchema = z
     attributes: z.array(attributeSchema).default([]),
     vocabulary: z.enum(["strict", "open"]).default("strict"),
     migrate: z.enum(["auto", "check", "off"]).default("auto"),
+    // Opsional. Tanpa embedder, pencarian makna dimatikan dan sisanya tetap jalan.
+    embedder: embedderSchema.optional(),
+    // Embedder/model berbeda dari yang tercatat di DB: "error" menolak, "reindex" membangun
+    // ulang semua vektor saat membuka (bisa lama pada data besar).
+    onEmbedderChange: z.enum(["error", "reindex"]).default("error"),
+    // Ambang bukti untuk "tidak tahu". minSimilarity bergantung pada model embedding;
+    // minKeywordCoverage = porsi istilah query yang harus ada di teks fakta. Kalibrasikan dengan
+    // data sendiri.
+    retrieval: z
+      .object({
+        minSimilarity: z.number().min(-1).max(1).default(0.5),
+        minKeywordCoverage: z.number().min(0).max(1).default(0.5),
+      })
+      .prefault({}),
   })
   .superRefine((options, ctx) => {
     const seen = new Set<string>();
@@ -66,6 +81,7 @@ export const optionsSchema = z
 export type AttributeDef = z.input<typeof attributeSchema>;
 export type MemoryOptions = z.input<typeof optionsSchema>;
 export type ResolvedOptions = z.output<typeof optionsSchema>;
+export type Retrieval = ResolvedOptions["retrieval"];
 export type ResolvedAttribute = z.output<typeof attributeSchema>;
 
 export function parseOptions(input: unknown): ResolvedOptions {

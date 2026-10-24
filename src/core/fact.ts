@@ -14,6 +14,7 @@ export interface Fact {
   valid_from: DateTime;
   valid_to?: DateTime;
   source: RecordId;
+  quote?: string;
 }
 
 interface AssertResult {
@@ -49,12 +50,19 @@ export async function assertFact(
     attribute: string;
     value: unknown;
     source: RecordId;
+    quote?: string;
+    // Kalimat fakta (full-text/embedding) dan vektornya; vektor ditulis dalam transaksi yang sama.
+    text?: string;
+    embedding?: number[];
     at?: Date;
   },
 ): Promise<AssertResult> {
   const attribute = ctx.registry.resolve(input.attribute);
   checkValue(attribute, input.value);
   const at = input.at ?? new Date();
+  // Partisi vektor dijaga walau fakta ini tanpa embedding, supaya vektor fakta lama yang
+  // ditutup ikut diperbarui.
+  const vec = ctx.vectors ? await ctx.vectors.ensure("fvec", input.scope) : undefined;
 
   let results: unknown[];
   try {
@@ -78,14 +86,22 @@ export async function assertFact(
          LET $head = IF $multi { $cur[WHERE value = $value][0] } ELSE { $cur[0] };
          IF !$multi AND $head != NONE AND $head.valid_from > $at { THROW "stale_time:fact"; };
          LET $same = $head != NONE AND $head.value = $value;
-         IF !$same AND !$multi {
-           UPDATE fact SET valid_to = $at
+         LET $closed = IF !$same AND !$multi {
+           (UPDATE fact SET valid_to = $at
              WHERE scope = $scope AND entity = $entity AND attribute = $attribute
-               AND valid_to = NONE;
+               AND valid_to = NONE
+             RETURN VALUE id)
+         } ELSE { [] };
+         IF $vec != NONE AND array::len($closed) > 0 {
+           UPDATE type::table($vec) SET valid_to = $at WHERE ref IN $closed;
          };
          LET $new = IF $same { NONE } ELSE {
            (CREATE ONLY fact SET scope = $scope, entity = $entity, attribute = $attribute,
-             value = $value, valid_from = $at, source = $source)
+             value = $value, valid_from = $at, source = $source, quote = $quote, text = $text)
+         };
+         IF $vec != NONE AND $new != NONE AND $embedding != NONE {
+           CREATE type::record($vec, record::id($new.id))
+             SET ref = $new.id, scope = $scope, embedding = $embedding, valid_from = $at;
          };
          RETURN {
            status: IF $same { "unchanged" } ELSE IF $head = NONE OR $multi { "created" }
@@ -99,6 +115,10 @@ export async function assertFact(
           attribute: attribute.key,
           value: input.value,
           source: input.source,
+          quote: input.quote,
+          text: input.text,
+          embedding: input.embedding,
+          vec,
           ref: attribute.type === "entity" ? input.value : undefined,
           multi: attribute.cardinality === "multi",
           at,
@@ -131,24 +151,37 @@ export async function retractFact(
   const hasValue = input.value !== undefined;
   if (hasValue) checkValue(attribute, input.value);
 
+  const vec = ctx.vectors ? await ctx.vectors.ensure("fvec", input.scope) : undefined;
+
   let closed: unknown[];
   try {
-    [closed = []] = await ctx.db
-      .query<[unknown[]]>(
-        `UPDATE fact SET valid_to = $at
+    const results = await ctx.db
+      .query<unknown[]>(
+        `BEGIN;
+         LET $closed = (UPDATE fact SET valid_to = $at
            WHERE scope = $scope AND entity = $entity AND attribute = $attribute
              AND valid_to = NONE AND ($any OR value = $value)
-           RETURN VALUE id`,
+           RETURN VALUE id);
+         IF $vec != NONE AND array::len($closed) > 0 {
+           UPDATE type::table($vec) SET valid_to = $at WHERE ref IN $closed;
+         };
+         RETURN { closed: $closed };
+         COMMIT;`,
         {
           scope: input.scope,
           entity: input.entity,
           attribute: attribute.key,
           value: input.value,
           any: !hasValue,
+          vec,
           at: input.at ?? new Date(),
         },
       )
       .collect();
+    const result = results.find((r) => r && typeof r === "object" && "closed" in r) as
+      | { closed: unknown[] }
+      | undefined;
+    closed = result?.closed ?? [];
   } catch (error) {
     // Penutupan sebelum valid_from melanggar ASSERT valid_to pada skema.
     throw new MemoryError("stale_time", thrownMessages.stale_time?.("") ?? "stale_time", {
