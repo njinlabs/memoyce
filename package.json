@@ -7,11 +7,13 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "test:coverage": "bun test --coverage",
+    "example:cli": "bun examples/cli/chat.ts",
     "lint": "biome check .",
     "format": "biome check --write ."
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.2",
+    "@google/genai": "^2.31.0",
     "@types/bun": "latest"
   },
   "peerDependencies": {

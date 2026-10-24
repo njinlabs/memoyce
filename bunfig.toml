@@ -1,7 +1,7 @@
 [test]
 root = "./tests"
 coverageSkipTestFiles = true
-coveragePathIgnorePatterns = ["tests/support/**"]
+coveragePathIgnorePatterns = ["tests/support/**", "examples/**"]
 coverageReporter = ["text", "lcov"]
 coverageDir = "./coverage"
 coverageThreshold = { line = 0.95, function = 0.95 }
