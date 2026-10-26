@@ -15,13 +15,13 @@
   ],
   "license": "MIT",
   "author": "Akbar Aditama",
-  "homepage": "https://github.com/akbaraditamasp/memoyce#readme",
+  "homepage": "https://github.com/njinlabs/memoyce#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/akbaraditamasp/memoyce.git"
+    "url": "git+https://github.com/njinlabs/memoyce.git"
   },
   "bugs": {
-    "url": "https://github.com/akbaraditamasp/memoyce/issues"
+    "url": "https://github.com/njinlabs/memoyce/issues"
   },
   "type": "module",
   "main": "./dist/index.js",
