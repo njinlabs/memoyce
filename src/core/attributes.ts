@@ -1,6 +1,6 @@
 import { RecordId, type SurrealSession } from "surrealdb";
-import { MemoryError } from "./errors";
-import { normalizeName, type ResolvedAttribute } from "./options";
+import { MemoryError } from "./errors.ts";
+import { normalizeName, type ResolvedAttribute } from "./options.ts";
 
 export type Attribute = ResolvedAttribute;
 

@@ -1,5 +1,5 @@
 import type { SurrealSession } from "surrealdb";
-import { MemoryError } from "./errors";
+import { MemoryError } from "./errors.ts";
 
 export interface Migration {
   version: number;

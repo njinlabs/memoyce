@@ -1,7 +1,7 @@
 import type { DateTime, RecordId } from "surrealdb";
-import { checkValue } from "./attributes";
-import type { Ctx } from "./context";
-import { MemoryError, type MemoryErrorCode } from "./errors";
+import { checkValue } from "./attributes.ts";
+import type { Ctx } from "./context.ts";
+import { MemoryError, type MemoryErrorCode } from "./errors.ts";
 
 export type FactStatus = "created" | "updated" | "unchanged";
 

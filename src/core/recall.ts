@@ -1,18 +1,18 @@
 import { DateTime, RecordId } from "surrealdb";
 import { z } from "zod";
-import type { Ctx } from "./context";
-import { embedTexts } from "./embedder";
-import { idToString } from "./ids";
+import type { Ctx } from "./context.ts";
+import { embedTexts } from "./embedder.ts";
+import { idToString } from "./ids.ts";
 import {
   coveredPositions,
   ngrams,
   partialEntities,
   partialLookupWords,
   shadowedEntities,
-} from "./mentions";
-import type { RememberError } from "./remember";
-import { isoTime } from "./schemas";
-import { contentTerms, tokenize } from "./text";
+} from "./mentions.ts";
+import type { RememberError } from "./remember.ts";
+import { isoTime } from "./schemas.ts";
+import { contentTerms, tokenize } from "./text.ts";
 
 const DEFAULT_LIMIT = 8;
 const RRF_K = 60;

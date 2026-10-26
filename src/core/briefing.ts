@@ -1,9 +1,9 @@
 import type { DateTime, RecordId } from "surrealdb";
 import { z } from "zod";
-import type { Ctx } from "./context";
-import { type EntityRefInfo, type FactDetail, loadFacts, recall } from "./recall";
-import type { RememberError } from "./remember";
-import { isoTime } from "./schemas";
+import type { Ctx } from "./context.ts";
+import { type EntityRefInfo, type FactDetail, loadFacts, recall } from "./recall.ts";
+import type { RememberError } from "./remember.ts";
+import { isoTime } from "./schemas.ts";
 
 const DEFAULT_QUERY_LIMIT = 8;
 const DEFAULT_BRIEFING_LIMIT = 20;

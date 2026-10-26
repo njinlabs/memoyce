@@ -1,15 +1,15 @@
 import type { RecordId } from "surrealdb";
 import { z } from "zod";
-import { type Attribute, checkValue } from "./attributes";
-import type { Ctx } from "./context";
-import { embedTexts } from "./embedder";
-import { type EntityMatch, entityKey, findEntities, getEntity } from "./entities";
-import { MemoryError, type MemoryErrorCode } from "./errors";
-import { assertFact, type FactStatus } from "./fact";
-import { idToString, parseId } from "./ids";
-import { createEntity, createSource } from "./records";
-import { isoTime } from "./schemas";
-import { displayValue, renderFactText } from "./text";
+import { type Attribute, checkValue } from "./attributes.ts";
+import type { Ctx } from "./context.ts";
+import { embedTexts } from "./embedder.ts";
+import { type EntityMatch, entityKey, findEntities, getEntity } from "./entities.ts";
+import { MemoryError, type MemoryErrorCode } from "./errors.ts";
+import { assertFact, type FactStatus } from "./fact.ts";
+import { idToString, parseId } from "./ids.ts";
+import { createEntity, createSource } from "./records.ts";
+import { isoTime } from "./schemas.ts";
+import { displayValue, renderFactText } from "./text.ts";
 
 const MAX_FACTS = 100;
 const MIN_QUOTE = 3;

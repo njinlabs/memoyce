@@ -1,5 +1,5 @@
 import type { RecordId } from "surrealdb";
-import type { Ctx } from "./context";
+import type { Ctx } from "./context.ts";
 
 // Harus identik dengan ekspresi `keys` di migrasi v2 (trim + huruf kecil).
 export function entityKey(name: string): string {

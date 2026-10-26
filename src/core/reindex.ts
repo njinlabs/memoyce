@@ -1,8 +1,8 @@
 import { RecordId } from "surrealdb";
-import type { Ctx } from "./context";
-import { embedTexts } from "./embedder";
-import { MemoryError } from "./errors";
-import { displayValue, renderFactText } from "./text";
+import type { Ctx } from "./context.ts";
+import { embedTexts } from "./embedder.ts";
+import { MemoryError } from "./errors.ts";
+import { displayValue, renderFactText } from "./text.ts";
 
 const PAGE = 256;
 

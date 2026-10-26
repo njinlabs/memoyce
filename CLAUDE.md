@@ -1,4 +1,6 @@
-# Agent Memory Kit
+# Memoyce
+
+Nama paket npm dan repositori: `memoyce` (dulu "Agent Memory Kit").
 
 Library memori untuk AI agent, diinstall oleh aplikasi pemakai (misalnya aplikasi Sales Agent AI-Native). Penyimpanan di SurrealDB. **AI milik aplikasi pemakai yang memanggil tool memori ini**; library tidak memanggil LLM.
 
@@ -8,6 +10,8 @@ Library memori untuk AI agent, diinstall oleh aplikasi pemakai (misalnya aplikas
 - Penyimpanan: SurrealDB (dokumen + graf + full-text + vektor dalam satu basis data) lewat paket `surrealdb`. Engine dipilih pemakai: `rocksdb://`, `surrealkv://`, `mem://` (embedded lewat `@surrealdb/node`), atau `ws://`/`http://` (server remote). Semua memakai SurrealQL yang sama; tidak ada lapisan abstraksi database lain.
 - Perintah: `bun run typecheck` (tsc), `bun run lint` / `bun run format` (Biome), `bun test`, `bun run test:coverage`. Jalankan typecheck, lint, dan test:coverage sebelum menyelesaikan pekerjaan.
 - Tambah dependensi hanya bila perlu.
+- **Paket npm (`memoyce`, ESM, MIT).** Impor relatif di `src/` memakai ekstensi `.ts` (`from "./core/x.ts"`); `tsconfig.build.json` dengan `rewriteRelativeImportExtensions` mengubahnya menjadi `.js` pada keluaran, dan `scripts/build.mjs` merapikan impor `.ts` yang tersisa di `.d.ts` (agar valid untuk pemakai `node16/nodenext`). `bun run build` -> `dist/`. `files` hanya `dist`, README, LICENSE. Dependensi: `zod` (dependencies), `surrealdb` (peerDependencies, karena instance `Surreal` pemakai bisa diberikan lewat `storage: { db }`), `@surrealdb/node` + `@surrealdb/node-native` (optionalDependencies, dimuat dinamis hanya untuk `mem://`/`rocksdb://`/`surrealkv://`; tanpa keduanya, `MemoryError("storage")` dengan pesan yang menjelaskan). Jangan mengimpor `@surrealdb/node` secara statis.
+- **Rilis:** `bun run typecheck && bun run lint && bun run test:coverage`, `bun run build && bun run smoke` (Node murni), lalu uji tarball: `npm pack`, pasang ke folder kosong, jalankan `node scripts/smoke.mjs memoyce`, dan kompilasi file TypeScript pemakai dengan `module/moduleResolution: nodenext` dan `skipLibCheck: false` (sudah pernah bersih). `prepublishOnly` menjalankan typecheck, lint, test, dan smoke. Versi `0.x`: antarmuka masih bisa berubah; semver ketat sejak 1.0.
 
 ## Prinsip Desain
 
@@ -130,4 +134,4 @@ Set evaluasi berlabel untuk mengukur akurasi `recall` dan mengkalibrasi ambang; 
 ## Status
 
 Selesai: opsi + validasi, penyimpanan (url/db), migrasi (v1-v5), kosakata atribut, `source`/`entity`, `assertFact` / `retractFact` / `factsAt`, `remember` (validasi dua tahap, verifikasi kutipan, resolusi entitas persis, embedding), `embedder` pluggable + `meta:embedding` + `reindex`, partisi vektor per scope, `recall` hibrida (vektor + BM25 + graf, RRF, ambang "tidak tahu"), tool netral untuk AI (`memory.tools`).
-Belum: **benchmark skala** (korpus realistis, dimensi 768-1536, ratusan ribu fakta per scope, ribuan scope; kalibrasi ambang sudah ada di `evals/` tetapi dataset-nya kecil dan sintetis, perlu diperluas dengan percakapan nyata), pertanyaan dua lompatan terbalik ('anggaran perusahaan Pak Hendra': Hendra -> CV Berkah -> anggaran), penyisipan riwayat yang lebih lama dari fakta berlaku (`stale_time`), `forget`, build/exports untuk npm, smoke test Node, README pemakai.
+Belum: **benchmark skala** (korpus realistis, dimensi 768-1536, ratusan ribu fakta per scope, ribuan scope; kalibrasi ambang sudah ada di `evals/` tetapi dataset-nya kecil dan sintetis, perlu diperluas dengan percakapan nyata), pertanyaan dua lompatan terbalik ('anggaran perusahaan Pak Hendra': Hendra -> CV Berkah -> anggaran), penyisipan riwayat yang lebih lama dari fakta berlaku (`stale_time`), `forget`.

@@ -1,24 +1,24 @@
-import { type ContextInput, type ContextResult, memoryContext } from "./core/briefing";
-import { createContext } from "./core/context";
-import type { MemoryOptions } from "./core/options";
-import { type RecallInput, type RecallResult, recall } from "./core/recall";
-import { reindex } from "./core/reindex";
-import { type RememberInput, type RememberResult, remember } from "./core/remember";
-import { createTools, type MemoryTool, type ToolsOptions } from "./core/tools";
+import { type ContextInput, type ContextResult, memoryContext } from "./core/briefing.ts";
+import { createContext } from "./core/context.ts";
+import type { MemoryOptions } from "./core/options.ts";
+import { type RecallInput, type RecallResult, recall } from "./core/recall.ts";
+import { reindex } from "./core/reindex.ts";
+import { type RememberInput, type RememberResult, remember } from "./core/remember.ts";
+import { createTools, type MemoryTool, type ToolsOptions } from "./core/tools.ts";
 
-export type { ContextInput, ContextResult } from "./core/briefing";
-export type { Embedder, EmbedKind } from "./core/embedder";
-export { MemoryError, type MemoryErrorCode } from "./core/errors";
-export type { AttributeDef, MemoryOptions } from "./core/options";
-export type { EntityRefInfo, RecallInput, RecallItem, RecallResult } from "./core/recall";
+export type { ContextInput, ContextResult } from "./core/briefing.ts";
+export type { Embedder, EmbedKind } from "./core/embedder.ts";
+export { MemoryError, type MemoryErrorCode } from "./core/errors.ts";
+export type { AttributeDef, MemoryOptions } from "./core/options.ts";
+export type { EntityRefInfo, RecallInput, RecallItem, RecallResult } from "./core/recall.ts";
 export type {
   EntityInfo,
   FactResult,
   RememberError,
   RememberInput,
   RememberResult,
-} from "./core/remember";
-export type { MemoryTool, ToolsOptions } from "./core/tools";
+} from "./core/remember.ts";
+export type { MemoryTool, ToolsOptions } from "./core/tools.ts";
 
 export interface Memory {
   // Menyimpan teks sumber dan fakta terstruktur. Kegagalan yang bisa diperbaiki pemanggil

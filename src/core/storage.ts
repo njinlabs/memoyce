@@ -1,8 +1,7 @@
 import { isAbsolute, relative, resolve } from "node:path";
-import { createNodeEngines } from "@surrealdb/node";
 import { createRemoteEngines, Surreal, type SurrealSession } from "surrealdb";
-import { MemoryError } from "./errors";
-import type { ResolvedOptions } from "./options";
+import { MemoryError } from "./errors.ts";
+import type { ResolvedOptions } from "./options.ts";
 
 export interface Storage {
   db: SurrealSession;
@@ -11,6 +10,27 @@ export interface Storage {
 }
 
 const embedded = /^(rocksdb|surrealkv):\/\/(.*)$/;
+
+// Engine yang dijalankan di dalam proses ini (butuh paket opsional @surrealdb/node).
+const inProcess = /^(mem|rocksdb|surrealkv):\/\//;
+
+type NodeModule = { createNodeEngines: typeof import("@surrealdb/node").createNodeEngines };
+
+// @surrealdb/node membawa binari native dan hanya dibutuhkan engine embedded, jadi dimuat saat
+// diperlukan. Pemakai yang hanya memakai server remote (ws://, http://) tidak perlu memasangnya.
+export async function loadNodeEngines(
+  importer: () => Promise<NodeModule> = () => import("@surrealdb/node"),
+) {
+  try {
+    return (await importer()).createNodeEngines();
+  } catch (cause) {
+    throw new MemoryError(
+      "storage",
+      "engine embedded (mem://, rocksdb://, surrealkv://) membutuhkan paket @surrealdb/node dan @surrealdb/node-native; pasang keduanya, atau pakai server remote (ws://, http://) atau storage: { db }",
+      { cause: String(cause) },
+    );
+  }
+}
 
 // Engine memotong drive path absolut Windows ("C:/x" menjadi "./C/x"), jadi path engine
 // embedded selalu diubah menjadi relatif terhadap cwd. Beda drive tidak bisa direlatifkan.
@@ -35,7 +55,10 @@ export async function openStorage(storage: ResolvedOptions["storage"]): Promise<
   }
 
   const client = new Surreal({
-    engines: { ...createRemoteEngines(), ...createNodeEngines() },
+    engines: {
+      ...createRemoteEngines(),
+      ...(inProcess.test(storage.url) ? await loadNodeEngines() : {}),
+    },
   });
   try {
     await client.connect(normalizeUrl(storage.url));

@@ -1,11 +1,11 @@
 import type { SurrealSession } from "surrealdb";
-import { type AttributeRegistry, createRegistry, syncAttributes } from "./attributes";
-import type { Embedder } from "./embedder";
-import { migrate } from "./migrations";
-import { type MemoryOptions, parseOptions, type Retrieval } from "./options";
-import { checkEmbedding } from "./reindex";
-import { openStorage } from "./storage";
-import { createVectorStore, type VectorStore } from "./vectors";
+import { type AttributeRegistry, createRegistry, syncAttributes } from "./attributes.ts";
+import type { Embedder } from "./embedder.ts";
+import { migrate } from "./migrations.ts";
+import { type MemoryOptions, parseOptions, type Retrieval } from "./options.ts";
+import { checkEmbedding } from "./reindex.ts";
+import { openStorage } from "./storage.ts";
+import { createVectorStore, type VectorStore } from "./vectors.ts";
 
 // Semua state satu instance memory. Tidak ada state global: aplikasi bebas membuat
 // beberapa instance (tenant, tes) dengan penyimpanan berbeda.

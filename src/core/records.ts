@@ -1,6 +1,6 @@
 import { type RecordId, RecordId as Rid } from "surrealdb";
-import type { Ctx } from "./context";
-import { newId } from "./ids";
+import type { Ctx } from "./context.ts";
+import { newId } from "./ids.ts";
 
 export async function createSource(
   ctx: Ctx,

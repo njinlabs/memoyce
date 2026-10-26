@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MemoryError } from "./errors";
+import { MemoryError } from "./errors.ts";
 
 export type EmbedKind = "document" | "query";
 

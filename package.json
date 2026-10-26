@@ -1,9 +1,56 @@
 {
-  "name": "agent",
-  "module": "src/index.ts",
+  "name": "memoyce",
+  "version": "0.1.0",
+  "description": "Memori jangka panjang untuk AI agent: fakta terstruktur, sadar waktu, berbukti, pencarian hibrida, dan berani menjawab \"tidak tahu\". Berbasis SurrealDB.",
+  "keywords": [
+    "ai",
+    "agent",
+    "memory",
+    "long-term-memory",
+    "llm",
+    "rag",
+    "surrealdb",
+    "knowledge-graph",
+    "temporal"
+  ],
+  "license": "MIT",
+  "author": "Akbar Aditama",
+  "homepage": "https://github.com/akbaraditamasp/memoyce#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/akbaraditamasp/memoyce.git"
+  },
+  "bugs": {
+    "url": "https://github.com/akbaraditamasp/memoyce/issues"
+  },
   "type": "module",
-  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
+    "build": "node scripts/build.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "prepack": "node scripts/build.mjs",
+    "prepublishOnly": "bun run typecheck && bun run lint && bun run test && node scripts/smoke.mjs",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "test:coverage": "bun test --coverage",
@@ -12,18 +59,22 @@
     "lint": "biome check .",
     "format": "biome check --write ."
   },
+  "dependencies": {
+    "zod": "^4.6.7"
+  },
+  "peerDependencies": {
+    "surrealdb": "^2.1.1"
+  },
+  "optionalDependencies": {
+    "@surrealdb/node": "^3.1.0",
+    "@surrealdb/node-native": "^3.3.4"
+  },
   "devDependencies": {
     "@biomejs/biome": "2.6.2",
     "@google/genai": "^2.31.0",
-    "@types/bun": "latest"
-  },
-  "peerDependencies": {
-    "typescript": "^7"
-  },
-  "dependencies": {
-    "@surrealdb/node": "^3.1.0",
-    "@surrealdb/node-native": "^3.3.4",
+    "@types/bun": "latest",
+    "@types/node": "^22.0.0",
     "surrealdb": "^2.1.1",
-    "zod": "^4.6.7"
+    "typescript": "^7"
   }
 }

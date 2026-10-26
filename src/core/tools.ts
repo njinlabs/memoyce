@@ -1,8 +1,8 @@
 import { z } from "zod";
-import type { Ctx } from "./context";
-import { MemoryError } from "./errors";
-import { recall, recallSchema } from "./recall";
-import { remember, rememberSchema } from "./remember";
+import type { Ctx } from "./context.ts";
+import { MemoryError } from "./errors.ts";
+import { recall, recallSchema } from "./recall.ts";
+import { remember, rememberSchema } from "./remember.ts";
 
 // Definisi tool netral: aplikasi menempelkannya ke SDK AI-nya sendiri (Vercel AI SDK,
 // Anthropic, OpenAI, MCP, ...). `inputSchema` adalah JSON Schema biasa; `execute` menerima

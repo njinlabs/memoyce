@@ -1,4 +1,4 @@
-# Agent Memory Kit
+# Memoyce
 
 Library memori jangka panjang untuk AI agent, berbasis SurrealDB. Aplikasi memasangnya sebagai
 "memory kit"; **AI milik aplikasi yang memanggil tool-nya**. Library tidak memanggil LLM sendiri.
@@ -7,13 +7,30 @@ Library memori jangka panjang untuk AI agent, berbasis SurrealDB. Aplikasi memas
 - **Berbukti**: setiap fakta membawa kutipan dari teks sumber, dan kutipan diverifikasi.
 - **Pencarian hibrida**: makna (vektor), kata kunci (BM25), dan relasi (graf).
 - **Berani menjawab "tidak tahu"**: `found: false` bila bukti di bawah ambang.
+- **Netral bahasa**: tidak ada daftar kata bahasa tertentu di dalam library (lihat [Bahasa](#bahasa)).
 
-Kontrak desain lengkap ada di [CLAUDE.md](CLAUDE.md). Library belum dipublikasikan ke npm.
+Kontrak desain lengkap ada di [CLAUDE.md](CLAUDE.md).
+
+## Instalasi
+
+```bash
+npm install memoyce surrealdb
+# Engine embedded (mem://, rocksdb://, surrealkv://) butuh dua paket opsional dengan binari native:
+npm install @surrealdb/node @surrealdb/node-native
+```
+
+`surrealdb` adalah peer dependency karena Anda bisa memberikan instance `Surreal` sendiri
+(`storage: { db }`). `@surrealdb/node` dan `@surrealdb/node-native` hanya dibutuhkan engine embedded;
+bila Anda hanya memakai server remote (`ws://`, `http://`), tidak perlu dipasang
+(`npm install --omit=optional`). Bila engine embedded dipakai tanpa paketnya, `createMemory`
+melempar `MemoryError` dengan kode `storage` dan pesan yang menjelaskan paket yang kurang.
+
+Persyaratan: Node.js 20+ atau Bun. Hanya ESM.
 
 ## Pemakaian
 
 ```ts
-import { createMemory } from "agent"; // nama paket menyusul
+import { createMemory } from "memoyce";
 
 const memory = await createMemory({
   // rocksdb:// (embedded), surrealkv://, mem://, ws:// (server), atau { db: instanceSurreal }
@@ -33,7 +50,7 @@ const memory = await createMemory({
       return await myEmbeddingProvider(texts, kind);
     },
   },
-  // Ambang "tidak tahu". Bergantung pada model embedding: kalibrasikan dengan data Anda.
+  // Ambang "tidak tahu". Bergantung pada model embedding DAN dimensinya: kalibrasikan dengan data Anda.
   retrieval: { minSimilarity: 0.5, minKeywordCoverage: 0.5 },
 });
 ```
@@ -112,16 +129,50 @@ await memory.remember({
   ],
 });
 
-const answer = await memory.recall({ scope: "org:42/lead:7", query: "berapa budget PT Maju" });
+const answer = await memory.recall({ scope: "org:42/lead:7", query: "anggaran PT Maju" });
 // answer.found === false berarti memori tidak punya jawabannya: jangan menebak.
 
 await memory.reindex(); // bangun ulang vektor (ganti model embedding, atau mengisi data lama)
 await memory.close();
 ```
 
+## Bahasa
+
+Library tidak membawa daftar kata bahasa apa pun, jadi bahasa data Anda bebas. Dua hal yang perlu
+Anda ketahui:
+- **Tool meminta AI menulis `query` sebagai kata kunci tanpa kata tanya**, dalam bahasa data
+  ("anggaran PT Maju", bukan "Berapa anggaran PT Maju?"). AI multibahasa, sehingga jalur tool tidak
+  butuh pengaturan bahasa.
+- **Bila Anda memanggil `memory.recall` / `memory.context` langsung dengan kalimat tanya**, isi
+  `retrieval.stopwords` (kata fungsi: "apa", "what", "les") dan `retrieval.titles` (gelar dan badan
+  usaha: "pt", "mr", "ibu") sesuai bahasa Anda, misalnya dari paket `stopwords-iso`. Tanpa daftar,
+  kalimat tanya jatuh ke pencarian makna; hasilnya tetap aman (lebih sering "tidak tahu", bukan
+  menebak), hanya lebih lemah.
+- Pemecah kata memakai pemisah huruf/angka Unicode dan indeks BM25 SurrealDB. Untuk bahasa tanpa
+  spasi (Mandarin, Jepang, Thai), pencarian kata kunci dan pencocokan nama sebagian tidak andal;
+  pencarian makna (embedder multibahasa) tetap bekerja.
+
+## Mengkalibrasi ambang
+
+Nilai kemiripan bergantung pada model embedding dan dimensinya, jadi bawaan (0,5) hanya awal.
+Folder [evals/](evals/README.md) berisi set evaluasi berlabel dan sapuan ambang (`bun run eval --sweep`);
+gunakan sebagai contoh untuk membuat set evaluasi dari percakapan Anda sendiri. Sebagai gambaran
+(model `gemini-embedding-001`, 768 dimensi): ambang 0,76 dengan cakupan kata kunci 0,5 memberi
+tingkat menebak 5% pada set uji internal. Ambang bergeser tajam menurut dimensi (mis. 0,88 pada 128
+dimensi), kalibrasi ulang tiap kali model atau dimensi berubah.
+
+## Skala dan batasan
+
+Terukur (lihat bagian Benchmark di [CLAUDE.md](CLAUDE.md)): jumlah scope hampir tidak berbiaya
+(~8 KB dan ~33 ms per scope, tanpa pelambatan sampai 3000 scope), sehingga pola satu scope per
+pengguna atau pelanggan cocok. Biaya utama ada pada jumlah vektor (~50 KB disk per fakta pada 768
+dimensi). Pada satu scope yang sangat besar (puluhan ribu fakta), recall melambat linear; kerjakan
+dengan scope kecil bila bisa. Versi `0.x`: antarmuka masih bisa berubah.
+
 ## Mencoba dengan LLM sungguhan
 
-Aplikasi chat terminal dengan Gemini ada di [examples/cli](examples/cli/README.md).
+Aplikasi chat terminal dengan Gemini ada di [examples/cli](examples/cli/README.md) (hanya ada di
+repositori, tidak ikut paket npm).
 
 ## Pengembangan
 
@@ -131,4 +182,10 @@ bun run typecheck
 bun run lint
 bun test
 bun run test:coverage   # gagal bila coverage < 95%
+bun run build           # dist/ (ESM + deklarasi)
+bun run smoke           # uji paket hasil build di Node
 ```
+
+## Lisensi
+
+MIT

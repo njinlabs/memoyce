@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { createNodeEngines } from "@surrealdb/node";
 import { Surreal } from "surrealdb";
 import { MemoryError } from "../../src/core/errors";
-import { normalizeUrl, openStorage } from "../../src/core/storage";
+import { loadNodeEngines, normalizeUrl, openStorage } from "../../src/core/storage";
 
 test("normalizeUrl: path relatif tetap relatif", () => {
   expect(normalizeUrl("rocksdb://./data/x")).toBe("rocksdb://data/x");
@@ -81,4 +81,20 @@ test("openStorage lewat db: session terpisah dan close() tidak menutup koneksi a
   const [hostRows] = await host.query<[{ id: unknown }[]]>("SELECT id FROM marker").collect();
   expect(hostRows).toHaveLength(1);
   await host.close();
+});
+
+test("loadNodeEngines: pesan jelas bila paket embedded tidak terpasang", async () => {
+  const error = await loadNodeEngines(async () => {
+    throw new Error("Cannot find package '@surrealdb/node'");
+  }).catch((e) => e);
+  expect(error).toBeInstanceOf(MemoryError);
+  expect(error.code).toBe("storage");
+  expect(error.message).toContain("@surrealdb/node");
+  expect(error.message).toContain("ws://");
+  expect(error.details.cause).toContain("Cannot find package");
+});
+
+test("loadNodeEngines: mengembalikan engine bila paket ada", async () => {
+  const engines = await loadNodeEngines();
+  expect(Object.keys(engines)).toEqual(expect.arrayContaining(["mem", "rocksdb"]));
 });

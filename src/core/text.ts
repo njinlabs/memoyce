@@ -1,5 +1,5 @@
 import { DateTime, RecordId } from "surrealdb";
-import type { Attribute } from "./attributes";
+import type { Attribute } from "./attributes.ts";
 
 // Pemecah kata untuk mengukur kecocokan istilah: huruf kecil, tanpa tanda diakritik, dipisah pada
 // apa pun selain huruf/angka. Mendekati analyzer full-text (blank, class, punct + ascii, lowercase).

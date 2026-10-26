@@ -1,8 +1,8 @@
 import type { Surreal } from "surrealdb";
 import { z } from "zod";
-import { embedderSchema } from "./embedder";
-import { MemoryError } from "./errors";
-import { termSet } from "./text";
+import { embedderSchema } from "./embedder.ts";
+import { MemoryError } from "./errors.ts";
+import { termSet } from "./text.ts";
 
 const identifier = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/);
 
