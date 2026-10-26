@@ -26,17 +26,22 @@ const { values: args } = parseArgs({
   },
 });
 
+// EMBEDDING_DIMENSION: dimensi vektor (bawaan 768). Dimensi lebih kecil menghemat disk secara proporsional.
+const dimension = process.env.EMBEDDING_DIMENSION
+  ? Number(process.env.EMBEDDING_DIMENSION)
+  : undefined;
+
 function chooseEmbedder(): Embedder {
   const provider =
     process.env.EMBEDDING_PROVIDER ?? (process.env.OPENAI_API_KEY ? "openai" : "gemini");
   if (provider === "openai") {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error("EMBEDDING_PROVIDER=openai membutuhkan OPENAI_API_KEY");
-    return openAiEmbedder({ apiKey });
+    return openAiEmbedder({ apiKey, dimension });
   }
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("Isi GEMINI_API_KEY atau OPENAI_API_KEY (lihat .env.example)");
-  return geminiEmbedder({ ai: new GoogleGenAI({ apiKey }) });
+  return geminiEmbedder({ ai: new GoogleGenAI({ apiKey }), dimension });
 }
 
 // Salinan deskripsi memory_recall SEBELUM kosakata atribut ditambahkan, sebagai pembanding.
@@ -279,7 +284,7 @@ Penulisan ulang query oleh ${model} (ambang: ${JSON.stringify(thr)})`);
 
 if (args.sweep) {
   const points = await sweep(memory, questions, {
-    similarities: [0.5, 0.6, 0.65, 0.7, 0.72, 0.74, 0.76, 0.78, 0.8],
+    similarities: [0.5, 0.6, 0.65, 0.7, 0.72, 0.74, 0.76, 0.78, 0.8, 0.82, 0.84, 0.86, 0.88, 0.9],
     coverages: [0.34, 0.5, 0.67, 1],
   });
   console.log("\nSapuan ambang (sim x coverage):");
