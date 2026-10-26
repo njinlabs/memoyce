@@ -50,7 +50,7 @@
     "build": "node scripts/build.mjs",
     "smoke": "node scripts/smoke.mjs",
     "prepack": "node scripts/build.mjs",
-    "prepublishOnly": "bun run typecheck && bun run lint && bun run test && node scripts/smoke.mjs",
+    "prepublishOnly": "bun run typecheck && bun run lint && bun run test && node scripts/build.mjs && node scripts/smoke.mjs",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "test:coverage": "bun test --coverage",

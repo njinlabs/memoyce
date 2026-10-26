@@ -186,6 +186,12 @@ bun run build           # dist/ (ESM + deklarasi)
 bun run smoke           # uji paket hasil build di Node
 ```
 
+## Rilis
+
+Membuat GitHub Release dengan tag `vX.Y.Z` (sama dengan `version` di `package.json`) menerbitkan
+paket ke npm secara otomatis, lengkap dengan provenance. Pra-rilis (`X.Y.Z-beta.1`) terbit dengan
+dist-tag `beta`, tidak menggantikan `latest`.
+
 ## Lisensi
 
 MIT
