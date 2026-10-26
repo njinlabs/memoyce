@@ -4,12 +4,24 @@ import { ngrams, shadowedEntities } from "../../src/core/mentions";
 const maju = { id: "entity:maju", scope: "s", keys: ["pt maju"] };
 const jaya = { id: "entity:jaya", scope: "s", keys: ["pt maju jaya"] };
 
-test("ngrams: kata 1..4, huruf kecil, tanpa tanda baca", () => {
+test("ngrams: kata 1..8, huruf kecil, tanpa tanda baca", () => {
   const grams = ngrams("Berapa anggaran PT. Maju Jaya?");
   expect(grams).toContain("pt maju jaya");
-  expect(grams).toContain("berapa anggaran pt maju");
-  expect(grams).not.toContain("berapa anggaran pt maju jaya");
+  expect(grams).toContain("berapa anggaran pt maju jaya");
   expect(ngrams("")).toEqual([]);
+
+  const long = ngrams("satu dua tiga empat lima enam tujuh delapan sembilan");
+  expect(long).toContain("satu dua tiga empat lima enam tujuh delapan");
+  expect(long).not.toContain("satu dua tiga empat lima enam tujuh delapan sembilan");
+});
+
+test("ngrams: batas per ukuran, bukan total, jadi potongan panjang tidak terbuang lebih dulu", () => {
+  const query = Array.from({ length: 150 }, (_, i) => `k${i}`).join(" ");
+  const grams = ngrams(query);
+  const bySize = (n: number) => grams.filter((g) => g.split(" ").length === n).length;
+  expect(bySize(1)).toBe(100);
+  expect(bySize(8)).toBe(100);
+  expect(grams).toHaveLength(800);
 });
 
 test("kecocokan terpanjang menang: PT Maju bayangan dari PT Maju Jaya", () => {
@@ -47,4 +59,16 @@ test("nama sama panjang tidak saling membayangi", () => {
   const a = { id: "entity:a", scope: "s", keys: ["budi"] };
   const b = { id: "entity:b", scope: "s", keys: ["budi"] };
   expect(shadowedEntities("kabar Budi", [a, b]).size).toBe(0);
+});
+
+test("nama panjang (6 kata) cocok persis dan membayangi nama pendek yang ada di dalamnya", () => {
+  const panjang = {
+    id: "entity:panjang",
+    scope: "s",
+    keys: ["pt karya mandiri utama sejahtera tbk"],
+  };
+  const pendek = { id: "entity:pendek", scope: "s", keys: ["pt karya mandiri"] };
+  const query = "Berapa anggaran PT Karya Mandiri Utama Sejahtera Tbk?";
+  expect(ngrams(query)).toContain("pt karya mandiri utama sejahtera tbk");
+  expect([...shadowedEntities(query, [panjang, pendek])]).toEqual([pendek.id]);
 });

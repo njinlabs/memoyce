@@ -93,3 +93,41 @@ test("menanyakan PT Maju tetap menemukan faktanya", async () => {
   expect(result.ok && result.found).toBe(true);
   expect(names(result)).toContain("PT Maju");
 });
+
+test("nama panjang (lebih dari 4 kata) ditemukan persis; nama pendek di dalamnya tidak tertukar", async () => {
+  const stored = await memory.remember({
+    scope: "org:long",
+    source: {
+      received_at: "2026-01-10T09:00:00Z",
+      content:
+        "PT Karya Mandiri Utama Sejahtera Tbk punya anggaran 900 juta. " +
+        "PT Karya Mandiri punya anggaran 30 juta.",
+    },
+    facts: [
+      {
+        entity: "PT Karya Mandiri Utama Sejahtera Tbk",
+        attribute: "budget",
+        value: 900_000_000,
+        quote: "Tbk punya anggaran 900 juta",
+      },
+      {
+        entity: "PT Karya Mandiri",
+        attribute: "budget",
+        value: 30_000_000,
+        quote: "PT Karya Mandiri punya anggaran 30 juta",
+      },
+    ],
+  });
+  expect(stored.ok).toBe(true);
+  const r = await memory.recall({
+    scope: "org:long",
+    query: "anggaran PT Karya Mandiri Utama Sejahtera Tbk",
+  });
+  expect(r.ok && r.linked_entities.map((e) => e.name)).toEqual([
+    "PT Karya Mandiri Utama Sejahtera Tbk",
+  ]);
+  expect(r.ok && r.items.map((i) => i.value)).toEqual([900_000_000]);
+
+  const short = await memory.recall({ scope: "org:long", query: "anggaran PT Karya Mandiri" });
+  expect(short.ok && short.items.map((i) => i.value)).toContain(30_000_000);
+});

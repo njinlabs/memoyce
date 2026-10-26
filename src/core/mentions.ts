@@ -1,5 +1,10 @@
-const MAX_NGRAM = 4;
-const MAX_PARTIAL_GRAM = 4;
+// Nama perusahaan sering lebih dari 4 kata ("PT Karya Mandiri Utama Sejahtera Tbk"). Nama lebih
+// panjang dari batas ini tidak pernah cocok persis.
+const MAX_NGRAM = 8;
+const MAX_PARTIAL_GRAM = 8;
+// Batas potongan per ukuran, bukan total: pemotongan total membuang potongan terpanjang (yang paling
+// spesifik) lebih dulu pada query panjang.
+const MAX_GRAMS_PER_SIZE = 100;
 const MIN_PARTIAL_TOKEN = 3;
 
 const words = (query: string): string[] =>
@@ -8,14 +13,18 @@ const words = (query: string): string[] =>
     .split(/[^\p{L}\p{N}]+/u)
     .filter(Boolean);
 
-// n-gram kata (1..4) dari query, untuk mencocokkan nama/alias entitas secara persis.
+// n-gram kata (1..8) dari query, untuk mencocokkan nama/alias entitas secara persis.
 export function ngrams(query: string): string[] {
   const list = words(query);
   const grams = new Set<string>();
   for (let size = 1; size <= MAX_NGRAM; size++) {
-    for (let i = 0; i + size <= list.length; i++) grams.add(list.slice(i, i + size).join(" "));
+    const bySize = new Set<string>();
+    for (let i = 0; i + size <= list.length && bySize.size < MAX_GRAMS_PER_SIZE; i++) {
+      bySize.add(list.slice(i, i + size).join(" "));
+    }
+    for (const gram of bySize) grams.add(gram);
   }
-  return [...grams].slice(0, 300);
+  return [...grams];
 }
 
 export interface NamedEntity {
