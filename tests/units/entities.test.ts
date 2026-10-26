@@ -3,7 +3,7 @@ import { RecordId } from "surrealdb";
 import { entityKey, findEntities, getEntity } from "../../src/core/entities";
 import { idToString, newId, parseId } from "../../src/core/ids";
 import { createEntity } from "../../src/core/records";
-import { contentTerms } from "../../src/core/text";
+import { contentTerms, termSet } from "../../src/core/text";
 import { openTestContext, type TestContext } from "../support/context";
 
 let t: TestContext;
@@ -74,8 +74,17 @@ test("ids: bolak-balik, tanpa tanda minus, bentuk salah ditolak", () => {
   expect(parseId("entity", "entity:")).toBeUndefined();
 });
 
-test("contentTerms: membuang kata tanya, tetap memakai semua kata bila semuanya kata umum", () => {
-  expect(contentTerms("Apa  budget PT Maju sekarang?")).toEqual(["budget", "pt", "maju"]);
-  expect(contentTerms("what is the")).toEqual(["what", "is", "the"]);
+test("contentTerms: membuang kata fungsi dari aplikasi; tanpa daftar tidak ada yang dibuang", () => {
+  const id = termSet(["apa", "sekarang"]);
+  expect(contentTerms("Apa  budget PT Maju sekarang?", id)).toEqual(["budget", "pt", "maju"]);
+  // Library universal: tanpa daftar dari aplikasi, semua kata dipakai.
+  expect(contentTerms("Apa budget PT Maju?")).toEqual(["apa", "budget", "pt", "maju"]);
+  // Bila semuanya kata fungsi, semua kata dipakai.
+  expect(contentTerms("what is the", termSet(["what", "is", "the"]))).toEqual([
+    "what",
+    "is",
+    "the",
+  ]);
+  expect(termSet(["Café", "APA"])).toEqual(new Set(["cafe", "apa"]));
   expect(contentTerms("Café CAFÉ")).toEqual(["cafe"]);
 });

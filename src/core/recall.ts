@@ -3,6 +3,13 @@ import { z } from "zod";
 import type { Ctx } from "./context";
 import { embedTexts } from "./embedder";
 import { idToString } from "./ids";
+import {
+  coveredPositions,
+  ngrams,
+  partialEntities,
+  partialLookupWords,
+  shadowedEntities,
+} from "./mentions";
 import type { RememberError } from "./remember";
 import { isoTime } from "./schemas";
 import { contentTerms, tokenize } from "./text";
@@ -11,9 +18,12 @@ const DEFAULT_LIMIT = 8;
 const RRF_K = 60;
 // Bobot kanal pada fusi. Graf lebih kecil: ia memperluas kandidat, bukan bukti isi.
 const WEIGHT = { vector: 1, keyword: 1, graph: 0.5 } as const;
-const MAX_NGRAM = 4;
 const MAX_ANN = 2000;
 const GRAPH_CAP = 200;
+// Kemiripan minimum query-ke-nama untuk menautkan entitas lewat makna (hanya bila tidak ada entitas
+// yang disebut persis). Model embedding memberi kemiripan dasar tinggi pada teks pendek apa pun,
+// jadi ambang umum (minSimilarity) terlalu longgar: ia menautkan entitas acak pada setiap query.
+const ENTITY_MIN_SIMILARITY = 0.75;
 
 export const recallSchema = z.object({
   scope: z.union([z.string().min(1), z.array(z.string().min(1)).min(1).max(20)]),
@@ -76,6 +86,9 @@ interface Candidate {
   bm25?: number;
   entity?: "direct" | "related";
   graphRank?: number;
+  // Teks fakta penghubung pada relasi satu lompatan ("PT Maju · pengambil keputusan: Sari" untuk
+  // fakta milik Sari). Istilah query yang dijelaskan oleh jalur ini dihitung terpenuhi.
+  via?: string;
 }
 
 interface EntityRow {
@@ -83,21 +96,25 @@ interface EntityRow {
   name: string;
   kind: string;
   scope: string;
+  keys?: string[];
 }
 
 const key = (id: RecordId): string => id.toString();
 
-// n-gram kata (1..4) dari query, untuk mencocokkan nama/alias entitas secara persis.
-function ngrams(query: string): string[] {
-  const words = query
-    .toLowerCase()
-    .split(/[^\p{L}\p{N}]+/u)
-    .filter(Boolean);
-  const grams = new Set<string>();
-  for (let size = 1; size <= MAX_NGRAM; size++) {
-    for (let i = 0; i + size <= words.length; i++) grams.add(words.slice(i, i + size).join(" "));
-  }
-  return [...grams].slice(0, 300);
+// Istilah query yang tidak muncul di teks fakta mana pun dalam scope. Istilah semacam ini
+// ("sentosa", "cuaca") tidak mungkin dipenuhi oleh fakta apa pun, jadi kecocokan sebagian pada
+// istilah lain tidak boleh dianggap bukti isi.
+async function unseenTerms(ctx: Ctx, scopes: string[], terms: string[]): Promise<string[]> {
+  const capped = terms.slice(0, 12);
+  if (capped.length === 0) return [];
+  const statements = capped.map(
+    (_, i) => `SELECT count() AS n FROM fact WHERE scope IN $scopes AND text @@ $t${i} GROUP ALL;`,
+  );
+  const params = Object.fromEntries(capped.map((term, i) => [`t${i}`, term]));
+  const results = await ctx.db
+    .query<{ n: number }[][]>(statements.join(" "), { scopes, ...params })
+    .collect();
+  return capped.filter((_, i) => (results[i]?.[0]?.n ?? 0) === 0);
 }
 
 function jsonValue(value: unknown, names: Map<string, string>): unknown {
@@ -206,7 +223,8 @@ export async function recall(ctx: Ctx, raw: unknown): Promise<RecallResult> {
   const asOf = input.as_of ? new Date(input.as_of) : new Date();
   const minSimilarity = input.min_similarity ?? ctx.retrieval.minSimilarity;
   const minKeyword = input.min_keyword_coverage ?? ctx.retrieval.minKeywordCoverage;
-  const queryTerms = contentTerms(input.query);
+  const { stopwords, titles } = ctx.retrieval;
+  const queryTerms = contentTerms(input.query, stopwords);
   const { limit } = input;
 
   const queryVector =
@@ -228,13 +246,58 @@ export async function recall(ctx: Ctx, raw: unknown): Promise<RecallResult> {
   const linked = new Map<string, EntityRow>();
   const [named = []] = await ctx.db
     .query<[EntityRow[]]>(
-      "SELECT id, name, kind, scope FROM entity WHERE scope IN $scopes AND keys CONTAINSANY $grams LIMIT 50",
+      "SELECT id, name, kind, scope, keys FROM entity WHERE scope IN $scopes AND keys CONTAINSANY $grams LIMIT 50",
       { scopes, grams: ngrams(input.query) },
     )
     .collect();
-  for (const entity of named) linked.set(key(entity.id), entity);
+  // Kecocokan terpanjang menang: entitas yang namanya hanya bagian dari nama entitas lain yang
+  // disebut ("PT Maju" dalam "PT Maju Jaya") salah sasaran. Ia tidak ditautkan, dan faktanya
+  // (sebagai subjek maupun nilai) dibuang dari kandidat di bawah.
+  const shadowedKeys = shadowedEntities(
+    input.query,
+    named.map((e) => ({ id: key(e.id), scope: e.scope, keys: e.keys ?? [] })),
+  );
+  const shadowed = named.filter((e) => shadowedKeys.has(key(e.id))).map((e) => e.id);
+  for (const entity of named)
+    if (!shadowedKeys.has(key(entity.id))) linked.set(key(entity.id), entity);
 
-  if (queryVector && ctx.vectors) {
+  // Nama sebagian ("Budi", "Ibu Sari", "Nusantara Logistik"): rangkaian kata query yang sama dengan
+  // potongan berurutan nama/alias entitas tanpa gelar. Kata tanya dan kata atribut tidak dihitung,
+  // supaya "kota" atau "anggaran" tidak menautkan entitas bernama mirip.
+  const exactEntities = [...linked.values()].map((e) => ({
+    id: key(e.id),
+    scope: e.scope,
+    keys: e.keys ?? [],
+  }));
+  const covered = coveredPositions(input.query, exactEntities);
+  const ignore = new Set(
+    [...ctx.registry.all()].flatMap((a) =>
+      tokenize([a.key, a.description, ...a.aliases].join(" ")),
+    ),
+  );
+  for (const word of stopwords) ignore.add(word);
+  const lookup = partialLookupWords(input.query, covered, ignore, titles);
+  if (lookup.length > 0) {
+    const [loose = []] = await ctx.db
+      .query<[EntityRow[]]>(
+        "SELECT id, name, kind, scope, keys FROM entity WHERE scope IN $scopes AND words CONTAINSANY $words LIMIT 50",
+        { scopes, words: lookup },
+      )
+      .collect();
+    const hits = partialEntities(
+      input.query,
+      loose.map((e) => ({ id: key(e.id), scope: e.scope, keys: e.keys ?? [] })),
+      covered,
+      ignore,
+      titles,
+    );
+    for (const entity of loose) if (hits.has(key(entity.id))) linked.set(key(entity.id), entity);
+  }
+
+  // Entitas yang disebut (persis atau sebagian) menjadi jangkar: hanya faktanya (dan relasi satu
+  // lompatan) yang boleh menjawab. Tanpa jangkar, entitas boleh ditemukan lewat kemiripan makna.
+  const exact = new Set(linked.keys());
+  if (queryVector && ctx.vectors && exact.size === 0) {
     for (const scope of scopes) {
       const table = await ctx.vectors.ensure("evec", scope);
       const [near = []] = await ctx.db
@@ -244,12 +307,15 @@ export async function recall(ctx: Ctx, raw: unknown): Promise<RecallResult> {
           { table, vector: queryVector },
         )
         .collect();
-      const ids = near.filter((n) => 1 - n.d >= minSimilarity).map((n) => n.ref);
+      const ids = near
+        .filter((n) => 1 - n.d >= Math.max(minSimilarity, ENTITY_MIN_SIMILARITY))
+        .map((n) => n.ref);
       if (ids.length === 0) continue;
       const [rows = []] = await ctx.db
         .query<[EntityRow[]]>("SELECT id, name, kind, scope FROM entity WHERE id IN $ids", { ids })
         .collect();
-      for (const entity of rows) linked.set(key(entity.id), entity);
+      for (const entity of rows)
+        if (!shadowedKeys.has(key(entity.id))) linked.set(key(entity.id), entity);
     }
   }
 
@@ -258,8 +324,8 @@ export async function recall(ctx: Ctx, raw: unknown): Promise<RecallResult> {
   if (linkedIds.length > 0) {
     const validity = "valid_from <= $asOf AND (valid_to = NONE OR valid_to > $asOf)";
     const [direct = []] = await ctx.db
-      .query<[{ id: RecordId; value: unknown; scope: string }[]]>(
-        `SELECT id, value, scope FROM fact
+      .query<[{ id: RecordId; value: unknown; scope: string; text?: string }[]]>(
+        `SELECT id, value, scope, text FROM fact
          WHERE scope IN $scopes AND entity IN $entities AND ${validity}
          ORDER BY valid_from DESC LIMIT ${GRAPH_CAP}`,
         { scopes, entities: linkedIds, asOf },
@@ -276,9 +342,15 @@ export async function recall(ctx: Ctx, raw: unknown): Promise<RecallResult> {
     const referenced = direct
       .map((d) => d.value)
       .filter((v): v is RecordId => v instanceof RecordId);
+    const via = new Map<string, string>();
+    for (const d of direct) {
+      if (d.value instanceof RecordId) {
+        via.set(key(d.value), `${via.get(key(d.value)) ?? ""} ${d.text ?? ""}`);
+      }
+    }
     const [related = []] = await ctx.db
-      .query<[{ id: RecordId; scope: string }[]]>(
-        `SELECT id, scope FROM fact
+      .query<[{ id: RecordId; scope: string; entity: RecordId }[]]>(
+        `SELECT id, scope, entity FROM fact
          WHERE scope IN $scopes AND (value IN $entities OR entity IN $referenced) AND ${validity}
          ORDER BY valid_from DESC LIMIT ${GRAPH_CAP}`,
         { scopes, entities: linkedIds, referenced, asOf },
@@ -289,6 +361,7 @@ export async function recall(ctx: Ctx, raw: unknown): Promise<RecallResult> {
       if (!c.entity) {
         c.entity = "related";
         c.graphRank = rank++;
+        c.via = via.get(key(row.entity));
       }
     }
   }
@@ -349,16 +422,38 @@ export async function recall(ctx: Ctx, raw: unknown): Promise<RecallResult> {
   // nama itu muncul di teks SEMUA fakta entitas tsb (sebagai subjek atau nilai), jadi tidak
   // membedakan fakta yang menjawab dari yang tidak. Bila query hanya berisi nama entitas
   // (menanyakan entitasnya secara umum), setiap fakta yang cocok dianggap relevan.
-  const mentioned = new Set([...linked.values()].flatMap((e) => tokenize(e.name)));
-  const evidenceTerms = queryTerms.filter((term) => !mentioned.has(term));
+  const mentioned = new Set(
+    [...linked].filter(([id]) => exact.has(id)).flatMap(([, e]) => tokenize(e.name)),
+  );
+  // Gelar ("ibu", "pt") menghias nama, bukan bukti isi.
+  const evidenceTerms = queryTerms.filter((term) => !mentioned.has(term) && !titles.has(term));
+  // Bukti kata kunci batal bila ada istilah query yang tidak ada di korpus sama sekali.
+  const lexical = (await unseenTerms(ctx, scopes, evidenceTerms)).length === 0;
   for (const row of keyword) {
-    const words = new Set(tokenize(row.text));
     const candidate = upsert(row.id, row.scope);
+    const words = new Set(tokenize(`${row.text} ${candidate.via ?? ""}`));
     candidate.bm25 = row.s;
     candidate.keyword =
       evidenceTerms.length === 0
         ? 1
         : evidenceTerms.filter((term) => words.has(term)).length / evidenceTerms.length;
+  }
+
+  // Query yang menyebut entitas persis hanya dijawab oleh fakta entitas itu (atau relasinya). Fakta
+  // entitas lain yang kebetulan memuat istilah yang sama ("anggaran") bukan jawaban.
+  if (exact.size > 0) {
+    for (const [id, candidate] of candidates) if (!candidate.entity) candidates.delete(id);
+  }
+
+  // Fakta entitas salah sasaran (lihat `shadowed`) dibuang dari semua kanal sebelum fusi.
+  if (shadowed.length > 0 && candidates.size > 0) {
+    const [wrong = []] = await ctx.db
+      .query<[{ id: RecordId }[]]>(
+        "SELECT id FROM fact WHERE id IN $ids AND (entity IN $shadowed OR value IN $shadowed)",
+        { ids: [...candidates.values()].map((c) => c.id), shadowed },
+      )
+      .collect();
+    for (const row of wrong) candidates.delete(key(row.id));
   }
 
   // --- Fusi (RRF) dan ambang bukti ---
@@ -388,7 +483,7 @@ export async function recall(ctx: Ctx, raw: unknown): Promise<RecallResult> {
     .filter(
       (c) =>
         (c.vector !== undefined && c.vector >= minSimilarity) ||
-        (c.keyword !== undefined && c.keyword >= minKeyword),
+        (lexical && c.keyword !== undefined && c.keyword >= minKeyword),
     )
     .sort((a, b) => fused(b) - fused(a))
     .slice(0, limit);

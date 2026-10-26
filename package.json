@@ -8,6 +8,7 @@
     "test": "bun test",
     "test:coverage": "bun test --coverage",
     "example:cli": "bun examples/cli/chat.ts",
+    "eval": "bun evals/run.ts",
     "lint": "biome check .",
     "format": "biome check --write ."
   },

@@ -12,22 +12,15 @@ export function tokenize(text: string): string[] {
     .filter(Boolean);
 }
 
-// Kata tanya dan penghubung umum (Indonesia + Inggris). Hanya dipakai saat menghitung cakupan
-// istilah query, supaya "apa", "siapa", "di", "what" tidak menurunkan bukti kata kunci.
-const STOPWORDS = new Set(
-  (
-    "apa siapa berapa kapan dimana mana bagaimana kenapa mengapa apakah adalah yang dan atau di ke " +
-    "dari untuk dengan pada ini itu saya kami kita dia mereka sudah belum akan masih sekarang " +
-    "tolong what who whom when where which why how is are was were the a an of to in on at for and " +
-    "or with does do did has have had be been"
-  ).split(" "),
-);
+// Normalisasi daftar kata dari aplikasi (huruf kecil, tanpa diakritik) menjadi himpunan.
+export const termSet = (list: readonly string[]): Set<string> => new Set(list.flatMap(tokenize));
 
-// Istilah query yang membawa makna (tanpa kata tanya/penghubung). Bila semuanya kata umum,
-// semua istilah dipakai.
-export function contentTerms(query: string): string[] {
+// Istilah query yang membawa makna, tanpa kata yang dinyatakan aplikasi sebagai kata fungsi
+// (`retrieval.stopwords`). Library tidak membawa daftar bahasa apa pun; tanpa daftar, semua istilah
+// dipakai. Bila semuanya kata fungsi, semua istilah dipakai.
+export function contentTerms(query: string, stopwords: ReadonlySet<string> = new Set()): string[] {
   const all = [...new Set(tokenize(query))];
-  const content = all.filter((term) => !STOPWORDS.has(term));
+  const content = all.filter((term) => !stopwords.has(term));
   return content.length > 0 ? content : all;
 }
 

@@ -2,6 +2,7 @@ import type { Surreal } from "surrealdb";
 import { z } from "zod";
 import { embedderSchema } from "./embedder";
 import { MemoryError } from "./errors";
+import { termSet } from "./text";
 
 const identifier = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/);
 
@@ -58,6 +59,14 @@ export const optionsSchema = z
       .object({
         minSimilarity: z.number().min(-1).max(1).default(0.5),
         minKeywordCoverage: z.number().min(0).max(1).default(0.5),
+        // Kata fungsi bahasa pengguna ("apa", "what", "dan") yang tidak dihitung sebagai bukti isi
+        // query. Library tidak membawa daftar bahasa apa pun (universal); isi sesuai bahasa data.
+        // Tanpa daftar, query berupa kalimat lebih sering jatuh ke jalur vektor; query berupa kata
+        // kunci (cara tool memintanya dari AI) tidak terpengaruh. Contoh sumber daftar: paket
+        // `stopwords-iso`.
+        stopwords: z.array(z.string()).default([]).transform(termSet),
+        // Gelar dan badan usaha yang dilewati saat mencocokkan nama sebagian ("pt", "mr", "ibu").
+        titles: z.array(z.string()).default([]).transform(termSet),
       })
       .prefault({}),
   })

@@ -91,6 +91,21 @@ export const migrations: Migration[] = [
       DEFINE INDEX IF NOT EXISTS fact_scope_recent ON fact FIELDS scope, valid_from;
     `,
   },
+  {
+    version: 5,
+    up: `
+      -- Kata-kata nama dan alias entitas (huruf kecil, dipisah pada selain huruf/angka), dihitung DB
+      -- sendiri. Dipakai mencari entitas yang disebut sebagian ("Budi" -> Budi Santoso).
+      DEFINE FIELD IF NOT EXISTS words ON entity TYPE array<string>
+        VALUE array::distinct(array::flatten(
+          array::concat([name], aliases).map(
+            |$s| string::words(string::replace(string::lowercase($s), /[^\\p{L}\\p{N}]+/, " "))
+          )
+        ));
+      UPDATE entity SET name = name;
+      DEFINE INDEX IF NOT EXISTS entity_scope_words ON entity FIELDS scope, words;
+    `,
+  },
 ];
 
 export const latestVersion = (): number => migrations.at(-1)?.version ?? 0;

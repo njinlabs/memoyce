@@ -94,9 +94,11 @@ export function createTools(ctx: Ctx, input: ToolsOptions): MemoryTool[] {
     name: "memory_recall",
     description: [
       "Cari informasi di memori jangka panjang. Panggil sebelum menjawab hal yang mungkin pernah disampaikan pengguna (angka, preferensi, status, riwayat).",
-      "`query` berupa pertanyaan atau kata kunci; gunakan nama entitas dan istilah penting. `as_of` (ISO 8601) menanyakan keadaan pada tanggal tertentu; tanpa itu hasilnya adalah kondisi terkini.",
+      'Tulis `query` sebagai kata kunci isi (nama entitas dan istilah penting) TANPA kata tanya atau kata penghubung, dalam bahasa yang sama dengan data memori. Contoh: "anggaran PT Maju", bukan "Berapa anggaran PT Maju?". Pertahankan semua nama entitas dan kata kunci dari pertanyaan pengguna. Ganti sebuah kata dengan kata dari DESKRIPSI atribut di bawah (bagian setelah titik dua) HANYA bila maknanya sama persis; jangan menulis nama teknis atribut (mis. pain_point, decision_maker) karena itu tidak ada di teks memori. Contoh: "dana yang disiapkan PT Maju" menjadi "anggaran PT Maju". Bila hal yang ditanyakan tidak ada di daftar (mis. kompetitor, logo, jumlah karyawan), tulis apa adanya; JANGAN diganti atribut lain yang cuma berdekatan, dan JANGAN membuang bagian pertanyaan (mis. "perusahaan tempat Rina bekerja"). `as_of` (ISO 8601) menanyakan keadaan pada tanggal tertentu; tanpa itu hasilnya adalah kondisi terkini.',
       "Setiap hasil membawa `quote` dan `source` sebagai bukti, serta `valid_from`/`valid_to`.",
-      "Jika `found` bernilai false, artinya memori TIDAK punya jawabannya: katakan kamu tidak tahu atau tanyakan ke pengguna. JANGAN menebak atau mengisi dari asumsi.",
+      "Jika `found` bernilai false, artinya memori TIDAK punya jawabannya: katakan kamu tidak tahu atau tanyakan ke pengguna. JANGAN menebak atau mengisi dari asumsi. Satu-satunya pengecualian: bila `query` tadi memakai kata di luar daftar atribut, boleh panggil sekali lagi dengan istilah dari daftar; bila tetap false, anggap memori tidak tahu.",
+      "Atribut yang dikenal memori (pakai istilahnya saat menulis `query`):",
+      vocabulary,
     ].join("\n"),
     inputSchema: jsonSchema(recallToolSchema),
     execute: (raw) =>

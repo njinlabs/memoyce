@@ -19,7 +19,7 @@ beforeAll(async () => {
     embedder: createFakeEmbedder(),
     // Ambang tinggi: embedder palsu memberi kemiripan ~0,5 pada fakta berbeda yang menyebut
     // nama entitas yang sama; bukti kata kunci (cakupan istilah) yang menentukan di tes ini.
-    retrieval: { minSimilarity: 0.6, minKeywordCoverage: 0.5 },
+    retrieval: { minSimilarity: 0.6, minKeywordCoverage: 0.5, stopwords: ["berapa"] },
   });
 });
 

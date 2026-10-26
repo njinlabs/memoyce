@@ -84,6 +84,15 @@ test("deskripsi memuat kosakata atribut beserta tipe, kardinalitas, dan alias", 
   expect(description).toContain("ditolak");
 });
 
+test("deskripsi memory_recall memuat kosakata dan aturan menulis query (tanpa mengganti pertanyaan)", () => {
+  const { description } = byName(createTools(t.ctx, { scope: "a" }), "memory_recall");
+  expect(description).toContain("- employer (string): tempat bekerja");
+  expect(description).toContain("DESKRIPSI atribut");
+  expect(description).toContain("JANGAN diganti atribut lain");
+  expect(description).toContain("TANPA kata tanya");
+  expect(description).toContain("JANGAN menebak");
+});
+
 test("deskripsi menyesuaikan mode open dan kosakata kosong", async () => {
   const open = await openTestContext({ vocabulary: "open", attributes: [] });
   try {
